@@ -51,7 +51,14 @@ async def back_to_categories(callback: CallbackQuery):
     """Возврат к списку категорий"""
     categories = await api_client.get_categories()
     keyboard = get_categories_keyboard(categories)
-    await callback.message.edit_text(
+    
+    # Удаляем предыдущее сообщение (карточку товара) и отправляем новое
+    try:
+        await callback.message.delete()
+    except:
+        pass
+
+    await callback.message.answer(
         "🛍 Каталог\n\nВыбери категорию:",
         reply_markup=keyboard
     )
