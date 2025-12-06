@@ -83,9 +83,15 @@ async def format_product_message(product: dict, user_id: int, current_index: int
     else:
         size_recommendation = "\n\n📐 Укажи свои параметры, чтобы получить рекомендацию по размеру"
 
+    # Ограничиваем описание (Telegram caption max 1024 символов)
+    description = product.get('description', '')
+    max_description_length = 600
+    if len(description) > max_description_length:
+        description = description[:max_description_length].rsplit(' ', 1)[0] + '...'
+
     message_text = f"""🧥 {product.get('name', 'Без названия')}
 
-{product.get('description', '')}
+{description}
 
 Размеры: {product.get('available_sizes', 'Нет данных')}{size_recommendation}
 
