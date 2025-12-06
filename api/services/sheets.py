@@ -77,8 +77,7 @@ class GoogleSheetsService:
         'Фото 5': 'photo_5_url',
         'Фото 6': 'photo_6_url',
         'Коллаж': 'collage_url',
-        'Активен': 'is_active',
-        'Таблица размеров': 'size_table_id'
+        'Активен': 'is_active'
     }
     
     SIZE_TABLES_MAPPING = {
@@ -259,7 +258,6 @@ class GoogleSheetsService:
                         'photo_4_url': convert_google_drive_url(mapped_row['photo_4_url']),
                         'photo_5_url': convert_google_drive_url(mapped_row['photo_5_url']),
                         'photo_6_url': convert_google_drive_url(mapped_row['photo_6_url']),
-                        'size_table_id': str(mapped_row.get('size_table_id') or 'outerwear_standard'),
                         'is_active': is_active
                     })
 
@@ -306,7 +304,6 @@ class GoogleSheetsService:
                         'photo_4_url': convert_google_drive_url(mapped_row['photo_4_url']),
                         'photo_5_url': convert_google_drive_url(mapped_row['photo_5_url']),
                         'photo_6_url': convert_google_drive_url(mapped_row['photo_6_url']),
-                        'size_table_id': str(mapped_row.get('size_table_id') or 'outerwear_standard'),
                         'is_active': is_active
                     }
                     products_cache[cache_key] = product

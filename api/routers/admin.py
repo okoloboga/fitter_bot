@@ -8,8 +8,16 @@ from datetime import datetime, timedelta
 
 from api.database import get_db
 from api.models import User, UserMeasurement, Favorite
+from api.services.sheets import sheets_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+@router.post("/clear-cache")
+async def clear_sheets_cache():
+    """Очистить кеш Google Sheets"""
+    sheets_service.clear_cache()
+    return {"status": "success", "message": "Google Sheets cache cleared"}
 
 
 @router.get("/stats")
