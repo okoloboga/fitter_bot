@@ -12,7 +12,7 @@ from typing import List, Optional, Dict
 logger = logging.getLogger(__name__)
 
 
-def convert_google_drive_url(url: str) -> Optional[str]:
+def convert_google_drive_url(url: str) -> str:
     """
     Конвертирует Google Drive ссылку из формата для просмотра в формат прямой ссылки.
 
@@ -23,12 +23,12 @@ def convert_google_drive_url(url: str) -> Optional[str]:
         url: Исходная ссылка Google Drive
 
     Returns:
-        Преобразованная ссылка или None, если URL пустой
+        Преобразованная ссылка или пустая строка, если URL пустой
     """
     # Проверяем на None, пустую строку или строку только с пробелами
     if not url or not isinstance(url, str) or not url.strip():
         logger.warning(f"Empty or invalid URL received: {repr(url)}")
-        return None
+        return ""
 
     url = url.strip()
 

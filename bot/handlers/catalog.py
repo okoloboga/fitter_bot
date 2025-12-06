@@ -38,7 +38,8 @@ def get_valid_photo_url(product: dict) -> Optional[str]:
     ]
 
     for url in urls_to_try:
-        if url and isinstance(url, str) and url.strip():
+        # Проверяем что URL не пустой и не пустая строка
+        if url and isinstance(url, str) and url.strip() and url != "":
             return url
 
     return None
@@ -58,7 +59,7 @@ def get_all_valid_photo_urls(product: dict) -> List[str]:
         product.get('photo_4_url'),
     ]
 
-    return [url for url in urls if url and isinstance(url, str) and url.strip()]
+    return [url for url in urls if url and isinstance(url, str) and url.strip() and url != ""]
 
 
 async def format_product_message(product: dict, user_id: int, current_index: int, total_count: int):
