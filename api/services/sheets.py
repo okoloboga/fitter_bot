@@ -81,7 +81,7 @@ class GoogleSheetsService:
     }
     
     SIZE_TABLES_MAPPING = {
-        'ID таблицы': 'table_id',
+        'Категория': 'table_id',
         'Размер': 'size',
         'Российский размер': 'russian_size',
         'Длина плеч мин': 'shoulder_length_min',
