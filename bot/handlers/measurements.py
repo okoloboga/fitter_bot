@@ -32,7 +32,7 @@ PARAM_CONFIG = {
         'prompt': 'Укажи длину плеч в сантиметрах (например: 40)',
         'type': 'int',
         'example': '40',
-        'validation': (30, 60),
+        'validation': None,
         'state': MeasurementStates.editing_shoulder_length
     },
     'back_width': {
@@ -40,7 +40,7 @@ PARAM_CONFIG = {
         'prompt': 'Укажи ширину спины в сантиметрах (например: 38)',
         'type': 'int',
         'example': '38',
-        'validation': (30, 60),
+        'validation': None,
         'state': MeasurementStates.editing_back_width
     },
     'sleeve_length': {
@@ -48,7 +48,7 @@ PARAM_CONFIG = {
         'prompt': 'Укажи длину рукава в сантиметрах (например: 60)',
         'type': 'int',
         'example': '60',
-        'validation': (40, 80),
+        'validation': None,
         'state': MeasurementStates.editing_sleeve_length
     },
     'back_length': {
@@ -56,7 +56,7 @@ PARAM_CONFIG = {
         'prompt': 'Укажи длину изделия по спинке в сантиметрах (например: 70)',
         'type': 'int',
         'example': '70',
-        'validation': (40, 100),
+        'validation': None,
         'state': MeasurementStates.editing_back_length
     },
     'chest': {
@@ -64,7 +64,7 @@ PARAM_CONFIG = {
         'prompt': 'Укажи обхват груди в сантиметрах (например: 90)',
         'type': 'int',
         'example': '90',
-        'validation': (70, 150),
+        'validation': None,
         'state': MeasurementStates.editing_chest
     },
     'waist': {
@@ -72,7 +72,7 @@ PARAM_CONFIG = {
         'prompt': 'Укажи обхват талии в сантиметрах (например: 70)',
         'type': 'int',
         'example': '70',
-        'validation': (50, 130),
+        'validation': None,
         'state': MeasurementStates.editing_waist
     },
     'hips': {
@@ -80,7 +80,7 @@ PARAM_CONFIG = {
         'prompt': 'Укажи обхват бедер в сантиметрах (например: 95)',
         'type': 'int',
         'example': '95',
-        'validation': (70, 160),
+        'validation': None,
         'state': MeasurementStates.editing_hips
     },
     'pants_length': {
@@ -88,7 +88,7 @@ PARAM_CONFIG = {
         'prompt': 'Укажи длину брюк в сантиметрах (например: 100)',
         'type': 'int',
         'example': '100',
-        'validation': (70, 120),
+        'validation': None,
         'state': MeasurementStates.editing_pants_length
     },
     'waist_girth': {
@@ -96,7 +96,7 @@ PARAM_CONFIG = {
         'prompt': 'Укажи обхват в поясе в сантиметрах (например: 75)',
         'type': 'int',
         'example': '75',
-        'validation': (50, 130),
+        'validation': None,
         'state': MeasurementStates.editing_waist_girth
     },
     'rise_height': {
@@ -104,7 +104,7 @@ PARAM_CONFIG = {
         'prompt': 'Укажи высоту посадки в сантиметрах (например: 25)',
         'type': 'int',
         'example': '25',
-        'validation': (15, 40),
+        'validation': None,
         'state': MeasurementStates.editing_rise_height
     },
     'back_rise_height': {
@@ -112,7 +112,7 @@ PARAM_CONFIG = {
         'prompt': 'Укажи высоту посадки сзади в сантиметрах (например: 35)',
         'type': 'int',
         'example': '35',
-        'validation': (15, 50),
+        'validation': None,
         'state': MeasurementStates.editing_back_rise_height
     }
 }
@@ -253,9 +253,9 @@ async def edit_shoulder_length(message: Message, state: FSMContext):
     config = PARAM_CONFIG['shoulder_length']
     try:
         value = int(message.text)
-        if not (config['validation'][0] <= value <= config['validation'][1]):
+        if value <= 0:
             await message.answer(
-                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                "Пожалуйста, введи корректное положительное число.",
                 reply_markup=get_cancel_keyboard()
             )
             return
@@ -273,9 +273,9 @@ async def edit_back_width(message: Message, state: FSMContext):
     config = PARAM_CONFIG['back_width']
     try:
         value = int(message.text)
-        if not (config['validation'][0] <= value <= config['validation'][1]):
+        if value <= 0:
             await message.answer(
-                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                "Пожалуйста, введи корректное положительное число.",
                 reply_markup=get_cancel_keyboard()
             )
             return
@@ -293,9 +293,9 @@ async def edit_sleeve_length(message: Message, state: FSMContext):
     config = PARAM_CONFIG['sleeve_length']
     try:
         value = int(message.text)
-        if not (config['validation'][0] <= value <= config['validation'][1]):
+        if value <= 0:
             await message.answer(
-                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                "Пожалуйста, введи корректное положительное число.",
                 reply_markup=get_cancel_keyboard()
             )
             return
@@ -313,9 +313,9 @@ async def edit_back_length(message: Message, state: FSMContext):
     config = PARAM_CONFIG['back_length']
     try:
         value = int(message.text)
-        if not (config['validation'][0] <= value <= config['validation'][1]):
+        if value <= 0:
             await message.answer(
-                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                "Пожалуйста, введи корректное положительное число.",
                 reply_markup=get_cancel_keyboard()
             )
             return
@@ -333,9 +333,9 @@ async def edit_chest(message: Message, state: FSMContext):
     config = PARAM_CONFIG['chest']
     try:
         value = int(message.text)
-        if not (config['validation'][0] <= value <= config['validation'][1]):
+        if value <= 0:
             await message.answer(
-                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                "Пожалуйста, введи корректное положительное число.",
                 reply_markup=get_cancel_keyboard()
             )
             return
@@ -353,9 +353,9 @@ async def edit_waist(message: Message, state: FSMContext):
     config = PARAM_CONFIG['waist']
     try:
         value = int(message.text)
-        if not (config['validation'][0] <= value <= config['validation'][1]):
+        if value <= 0:
             await message.answer(
-                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                "Пожалуйста, введи корректное положительное число.",
                 reply_markup=get_cancel_keyboard()
             )
             return
@@ -373,9 +373,9 @@ async def edit_hips(message: Message, state: FSMContext):
     config = PARAM_CONFIG['hips']
     try:
         value = int(message.text)
-        if not (config['validation'][0] <= value <= config['validation'][1]):
+        if value <= 0:
             await message.answer(
-                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                "Пожалуйста, введи корректное положительное число.",
                 reply_markup=get_cancel_keyboard()
             )
             return
@@ -393,9 +393,9 @@ async def edit_pants_length(message: Message, state: FSMContext):
     config = PARAM_CONFIG['pants_length']
     try:
         value = int(message.text)
-        if not (config['validation'][0] <= value <= config['validation'][1]):
+        if value <= 0:
             await message.answer(
-                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                "Пожалуйста, введи корректное положительное число.",
                 reply_markup=get_cancel_keyboard()
             )
             return
@@ -413,9 +413,9 @@ async def edit_waist_girth(message: Message, state: FSMContext):
     config = PARAM_CONFIG['waist_girth']
     try:
         value = int(message.text)
-        if not (config['validation'][0] <= value <= config['validation'][1]):
+        if value <= 0:
             await message.answer(
-                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                "Пожалуйста, введи корректное положительное число.",
                 reply_markup=get_cancel_keyboard()
             )
             return
@@ -433,9 +433,9 @@ async def edit_rise_height(message: Message, state: FSMContext):
     config = PARAM_CONFIG['rise_height']
     try:
         value = int(message.text)
-        if not (config['validation'][0] <= value <= config['validation'][1]):
+        if value <= 0:
             await message.answer(
-                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                "Пожалуйста, введи корректное положительное число.",
                 reply_markup=get_cancel_keyboard()
             )
             return
@@ -453,9 +453,9 @@ async def edit_back_rise_height(message: Message, state: FSMContext):
     config = PARAM_CONFIG['back_rise_height']
     try:
         value = int(message.text)
-        if not (config['validation'][0] <= value <= config['validation'][1]):
+        if value <= 0:
             await message.answer(
-                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                "Пожалуйста, введи корректное положительное число.",
                 reply_markup=get_cancel_keyboard()
             )
             return
