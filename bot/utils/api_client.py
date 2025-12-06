@@ -59,17 +59,17 @@ class APIClient:
             return None
 
     # Measurements endpoints
-    async def save_measurements(self, user_tg_id: int, height: int, chest: int, waist: int, hips: int) -> Optional[Dict]:
-        """Сохранить параметры пользователя"""
+    async def save_measurements(self, user_tg_id: int, **measurements) -> Optional[Dict]:
+        """Сохранить параметры пользователя (поддерживает частичное обновление)"""
         try:
             session = await self._get_session()
             async with session.post(
                 f"{self.base_url}/api/measurements/{user_tg_id}",
-                json={"height": height, "chest": chest, "waist": waist, "hips": hips}
+                json=measurements
             ) as response:
                 if response.status == 200:
                     return await response.json()
-                logger.error(f"Failed to save measurements: {response.status}")
+                logger.error(f"Failed to save measurements: {response.status} {await response.text()}")
                 return None
         except Exception as e:
             logger.error(f"Error saving measurements: {e}")
