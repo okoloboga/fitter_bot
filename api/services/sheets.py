@@ -316,6 +316,7 @@ class GoogleSheetsService:
         try:
             worksheet = self.spreadsheet.worksheet("Размеры")
             records = worksheet.get_all_records()
+            logger.info(f"Read {len(records)} records from 'Размеры' sheet: {records}")
 
             size_table = []
             for row in records:
