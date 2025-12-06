@@ -84,26 +84,37 @@ class GoogleSheetsService:
         'Категория': 'table_id',
         'Размер': 'size',
         'Российский размер': 'russian_size',
+        'Длина плеч': 'shoulder_length',
         'Длина плеч мин': 'shoulder_length_min',
         'Длина плеч макс': 'shoulder_length_max',
+        'Ширина спины': 'back_width',
         'Ширина спины мин': 'back_width_min',
         'Ширина спины макс': 'back_width_max',
+        'Длина рукава': 'sleeve_length',
         'Длина рукава мин': 'sleeve_length_min',
         'Длина рукава макс': 'sleeve_length_max',
+        'Длина по спинке': 'back_length',
         'Длина по спинке мин': 'back_length_min',
         'Длина по спинке макс': 'back_length_max',
+        'Обхват груди': 'chest',
         'Обхват груди мин': 'chest_min',
         'Обхват груди макс': 'chest_max',
+        'Обхват талии': 'waist',
         'Обхват талии мин': 'waist_min',
         'Обхват талии макс': 'waist_max',
+        'Обхват бедер': 'hips',
         'Обхват бедер мин': 'hips_min',
         'Обхват бедер макс': 'hips_max',
+        'Длина брюк': 'pants_length',
         'Длина брюк мин': 'pants_length_min',
         'Длина брюк макс': 'pants_length_max',
+        'Обхват в поясе': 'waist_girth',
         'Обхват в поясе мин': 'waist_girth_min',
         'Обхват в поясе макс': 'waist_girth_max',
+        'Высота посадки': 'rise_height',
         'Высота посадки мин': 'rise_height_min',
         'Высота посадки макс': 'rise_height_max',
+        'Высота посадки сзади': 'back_rise_height',
         'Высота посадки сзади мин': 'back_rise_height_min',
         'Высота посадки сзади макс': 'back_rise_height_max'
     }
@@ -344,8 +355,20 @@ class GoogleSheetsService:
                         min_val = mapped_row.get(min_key)
                         max_val = mapped_row.get(max_key)
 
-                        size_entry[min_key] = int(min_val) if min_val else None
-                        size_entry[max_key] = int(max_val) if max_val else None
+                        # Fallback to single value if min/max are not present
+                        if min_val is None and max_val is None:
+                            # The key for a single value in the mapping is the English key itself
+                            # We need to find the Russian name from the mapping to look up in the row
+                            # This is complex, so let's assume a simpler direct lookup for now
+                            # A better approach would be to reverse the mapping.
+                            # For now, we will try to get the direct english key, which might be present
+                            single_val = mapped_row.get(param)
+                            if single_val is not None:
+                                min_val = single_val
+                                max_val = single_val
+
+                        size_entry[min_key] = int(min_val) if min_val not in [None, ''] else None
+                        size_entry[max_key] = int(max_val) if max_val not in [None, ''] else None
 
                     size_table.append(size_entry)
 
