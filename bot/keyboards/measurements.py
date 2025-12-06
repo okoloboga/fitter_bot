@@ -32,7 +32,7 @@ def get_edit_measurements_keyboard():
     """Клавиатура выбора параметра для редактирования (все 12 параметров)"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="📏 Рос. размер", callback_data="measurements:edit:russian_size"),
+            InlineKeyboardButton(text="📏 Российский размер", callback_data="measurements:edit:russian_size"),
         ],
         [
             InlineKeyboardButton(text="👔 Длина плеч", callback_data="measurements:edit:shoulder_length"),
