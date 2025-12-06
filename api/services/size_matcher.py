@@ -43,7 +43,7 @@ class SizeMatcherService:
         Returns:
             Dict с рекомендацией размера
         """
-        logger.info("--- Starting Size Recommendation ---")
+        logger.warning("--- Starting Size Recommendation ---")
         logger.info(f"User Measurements: {user_measurements}")
         logger.info(f"Available Sizes for Product: {available_sizes}")
         logger.info(f"Received Size Table with {len(size_table)} rows.")
