@@ -39,54 +39,72 @@ def get_product_keyboard(product: Dict, category_id: str, current_index: int,
     fav_button_text = "❌ Убрать из избранного" if is_favorite else "⭐️ В избранное"
     fav_action = "remove" if is_favorite else "add"
     product_id = product['product_id']
-    wb_link = product.get('wb_link', 'https://www.wildberries.ru/')
+    
+    buttons = []
 
-
-    buttons = [
-        [InlineKeyboardButton(
+    # 1-й ряд: Избранное и Все фото
+    buttons.append([
+        InlineKeyboardButton(
             text=fav_button_text,
             callback_data=f"fav:{fav_action}:{product_id}"
-        )],
-        [InlineKeyboardButton(
-            text="🔗 Открыть на Wildberries",
-            url=wb_link
-        )],
-        [InlineKeyboardButton(
-            text="📸 Посмотреть все фото",
+        ),
+        InlineKeyboardButton(
+            text="Все фото",
             callback_data=f"photos:{product_id}:{category_id}:{current_index}"
-        )],
-        [InlineKeyboardButton(
+        )
+    ])
+
+    # 2-й ряд: Маркетплейсы
+    marketplace_row = []
+    wb_link = product.get('wb_link')
+    ozon_link = product.get('ozon_url')
+
+    if wb_link and isinstance(wb_link, str) and wb_link.strip():
+        marketplace_row.append(InlineKeyboardButton(
+            text="Wildberries",
+            url=wb_link
+        ))
+    
+    if ozon_link and isinstance(ozon_link, str) and ozon_link.strip():
+        marketplace_row.append(InlineKeyboardButton(
+            text="Ozon",
+            url=ozon_link
+        ))
+    
+    if marketplace_row:
+        buttons.append(marketplace_row)
+
+    # 3-й ряд: Примерка
+    buttons.append([
+        InlineKeyboardButton(
             text="👗 Примерить (скоро!)",
             callback_data=f"tryon:{product_id}"
-        )],
-    ]
+        )
+    ])
 
-    # Навигация
+    # 4-й ряд: Навигация
     nav_row = []
-
-    # Кнопка назад
-    if current_index > 0:
+    if total_count > 1:
+        # Кнопка назад
         nav_row.append(InlineKeyboardButton(
             text="◀️",
             callback_data=f"nav:{category_id}:{current_index}:prev"
         ))
 
-    # Счетчик
-    nav_row.append(InlineKeyboardButton(
-        text=f"({current_index + 1}/{total_count})",
-        callback_data="noop"
-    ))
+        # Счетчик
+        nav_row.append(InlineKeyboardButton(
+            text=f"({current_index + 1}/{total_count})",
+            callback_data="noop"
+        ))
 
-    # Кнопка вперед
-    if current_index < total_count - 1:
+        # Кнопка вперед
         nav_row.append(InlineKeyboardButton(
             text="▶️",
             callback_data=f"nav:{category_id}:{current_index}:next"
         ))
+        buttons.append(nav_row)
 
-    buttons.append(nav_row)
-
-    # Кнопка возврата к категориям
+    # 5-й ряд: Кнопка возврата к категориям
     buttons.append([
         InlineKeyboardButton(
             text="🔙 К категориям",
@@ -107,49 +125,74 @@ def get_back_to_product_keyboard(product_id: str, category_id: str, index: int):
     ])
 
 
-def get_favorites_product_keyboard(product_id: str, current_index: int, total_count: int):
+def get_favorites_product_keyboard(product: Dict, current_index: int, total_count: int):
     """Клавиатура для товара в избранном"""
-    buttons = [
-        [InlineKeyboardButton(
+    product_id = product['product_id']
+    
+    buttons = []
+
+    # 1-й ряд: Избранное и Все фото
+    buttons.append([
+        InlineKeyboardButton(
             text="❌ Убрать из избранного",
             callback_data=f"fav:remove:{product_id}"
-        )],
-        [InlineKeyboardButton(
-            text="🔗 Открыть на Wildberries",
-            url="https://www.wildberries.ru/"
-        )],
-        [InlineKeyboardButton(
-            text="📸 Посмотреть все фото",
+        ),
+        InlineKeyboardButton(
+            text="Все фото",
             callback_data=f"photos_fav:{product_id}:{current_index}"
-        )],
-        [InlineKeyboardButton(
+        )
+    ])
+
+    # 2-й ряд: Маркетплейсы
+    marketplace_row = []
+    wb_link = product.get('wb_link')
+    ozon_link = product.get('ozon_url')
+
+    if wb_link and isinstance(wb_link, str) and wb_link.strip():
+        marketplace_row.append(InlineKeyboardButton(
+            text="Wildberries",
+            url=wb_link
+        ))
+    
+    if ozon_link and isinstance(ozon_link, str) and ozon_link.strip():
+        marketplace_row.append(InlineKeyboardButton(
+            text="Ozon",
+            url=ozon_link
+        ))
+    
+    if marketplace_row:
+        buttons.append(marketplace_row)
+
+    # 3-й ряд: Примерка
+    buttons.append([
+        InlineKeyboardButton(
             text="👗 Примерить (скоро!)",
             callback_data=f"tryon:{product_id}"
-        )],
-    ]
+        )
+    ])
 
-    # Навигация
+    # 4-й ряд: Навигация
     nav_row = []
-    if current_index > 0:
+    if total_count > 1:
+        if current_index > 0:
+            nav_row.append(InlineKeyboardButton(
+                text="◀️",
+                callback_data=f"nav_fav:{current_index}:prev"
+            ))
+
         nav_row.append(InlineKeyboardButton(
-            text="◀️",
-            callback_data=f"nav_fav:{current_index}:prev"
+            text=f"({current_index + 1}/{total_count})",
+            callback_data="noop"
         ))
 
-    nav_row.append(InlineKeyboardButton(
-        text=f"({current_index + 1}/{total_count})",
-        callback_data="noop"
-    ))
+        if current_index < total_count - 1:
+            nav_row.append(InlineKeyboardButton(
+                text="▶️",
+                callback_data=f"nav_fav:{current_index}:next"
+            ))
+        buttons.append(nav_row)
 
-    if current_index < total_count - 1:
-        nav_row.append(InlineKeyboardButton(
-            text="▶️",
-            callback_data=f"nav_fav:{current_index}:next"
-        ))
-
-    buttons.append(nav_row)
-
-    # Кнопка возврата в главное меню
+    # 5-й ряд: Кнопка возврата в главное меню
     buttons.append([
         InlineKeyboardButton(
             text="🔙 В главное меню",

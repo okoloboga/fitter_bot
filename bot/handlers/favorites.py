@@ -85,12 +85,12 @@ async def show_favorites(callback: CallbackQuery):
         await callback.message.answer_photo(
             photo=URLInputFile(photo_url),
             caption=message_text,
-            reply_markup=get_favorites_product_keyboard(product_id, 0, len(favorites))
+            reply_markup=get_favorites_product_keyboard(product, 0, len(favorites))
         )
     else:
         await callback.message.answer(
             f"📷 Фото недоступно\n\n{message_text}",
-            reply_markup=get_favorites_product_keyboard(product_id, 0, len(favorites))
+            reply_markup=get_favorites_product_keyboard(product, 0, len(favorites))
         )
     await callback.answer()
 
@@ -154,12 +154,22 @@ async def remove_favorite(callback: CallbackQuery):
                     product_id = favorites[0]['product_id']
                     product = await api_client.get_product_by_id(product_id)
                     message_text = await format_favorite_product_message(product, user_id, 0, len(favorites))
+                    
+                    photo_url = get_valid_photo_url(product)
+                    if not photo_url:
+                        await callback.message.delete()
+                        await callback.message.answer(
+                            f"📷 Фото недоступно\n\n{message_text}",
+                            reply_markup=get_favorites_product_keyboard(product, 0, len(favorites))
+                        )
+                        return
+
                     await callback.message.edit_media(
                         media=InputMediaPhoto(
-                            media=URLInputFile(product['collage_url']),
+                            media=URLInputFile(photo_url),
                             caption=message_text
                         ),
-                        reply_markup=get_favorites_product_keyboard(product_id, 0, len(favorites))
+                        reply_markup=get_favorites_product_keyboard(product, 0, len(favorites))
                     )
             else:
                 new_keyboard[0] = [
@@ -211,7 +221,7 @@ async def navigate_favorites(callback: CallbackQuery):
         await callback.message.delete()
         await callback.message.answer(
             f"📷 Фото недоступно\n\n{message_text}",
-            reply_markup=get_favorites_product_keyboard(product_id, new_index, len(favorites))
+            reply_markup=get_favorites_product_keyboard(product, new_index, len(favorites))
         )
         await callback.answer()
         return
@@ -222,14 +232,14 @@ async def navigate_favorites(callback: CallbackQuery):
                 media=URLInputFile(photo_url),
                 caption=message_text
             ),
-            reply_markup=get_favorites_product_keyboard(product_id, new_index, len(favorites))
+            reply_markup=get_favorites_product_keyboard(product, new_index, len(favorites))
         )
     except:
         await callback.message.delete()
         await callback.message.answer_photo(
             photo=URLInputFile(photo_url),
             caption=message_text,
-            reply_markup=get_favorites_product_keyboard(product_id, new_index, len(favorites))
+            reply_markup=get_favorites_product_keyboard(product, new_index, len(favorites))
         )
     await callback.answer()
 
@@ -289,11 +299,11 @@ async def back_to_favorite_product(callback: CallbackQuery):
         await callback.message.answer_photo(
             photo=URLInputFile(photo_url),
             caption=message_text,
-            reply_markup=get_favorites_product_keyboard(product_id, index, len(favorites))
+            reply_markup=get_favorites_product_keyboard(product, index, len(favorites))
         )
     else:
         await callback.message.answer(
             f"📷 Фото недоступно\n\n{message_text}",
-            reply_markup=get_favorites_product_keyboard(product_id, index, len(favorites))
+            reply_markup=get_favorites_product_keyboard(product, index, len(favorites))
         )
     await callback.answer()
