@@ -173,9 +173,12 @@ async def show_measurements(callback: CallbackQuery):
 @router.callback_query(F.data == "measurements:edit_menu")
 async def show_edit_menu(callback: CallbackQuery):
     """Показать меню редактирования параметров"""
+    user_id = callback.from_user.id
+    measurements = await api_client.get_measurements(user_id)
+
     await callback.message.edit_text(
         "Выбери параметр для изменения:\n\n💡 Можешь заполнить только те параметры, которые знаешь!",
-        reply_markup=get_edit_measurements_keyboard()
+        reply_markup=get_edit_measurements_keyboard(measurements)
     )
     await callback.answer()
 
