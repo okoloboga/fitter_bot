@@ -6,9 +6,38 @@ from google.oauth2.service_account import Credentials
 from cachetools import TTLCache
 import os
 import logging
+import re
 from typing import List, Optional, Dict
 
 logger = logging.getLogger(__name__)
+
+
+def convert_google_drive_url(url: str) -> str:
+    """
+    Конвертирует Google Drive ссылку из формата для просмотра в формат прямой ссылки.
+
+    Из: https://drive.google.com/file/d/{FILE_ID}/view?usp=sharing
+    В: https://drive.google.com/uc?export=view&id={FILE_ID}
+
+    Args:
+        url: Исходная ссылка Google Drive
+
+    Returns:
+        Преобразованная ссылка или исходная, если не удалось преобразовать
+    """
+    if not url or not isinstance(url, str):
+        return url
+
+    # Паттерн для извлечения ID файла из ссылки Google Drive
+    pattern = r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)'
+    match = re.search(pattern, url)
+
+    if match:
+        file_id = match.group(1)
+        return f"https://drive.google.com/uc?export=view&id={file_id}"
+
+    # Если ссылка уже в правильном формате или не является Google Drive ссылкой
+    return url
 
 # Кеш для данных из Google Sheets
 categories_cache = TTLCache(maxsize=1, ttl=600)  # 10 минут
@@ -183,11 +212,11 @@ class GoogleSheetsService:
                         'description': mapped_row['description'],
                         'wb_link': mapped_row['wb_link'],
                         'available_sizes': mapped_row['available_sizes'],
-                        'collage_url': mapped_row['collage_url'],
-                        'photo_1_url': mapped_row['photo_1_url'],
-                        'photo_2_url': mapped_row['photo_2_url'],
-                        'photo_3_url': mapped_row['photo_3_url'],
-                        'photo_4_url': mapped_row['photo_4_url'],
+                        'collage_url': convert_google_drive_url(mapped_row['collage_url']),
+                        'photo_1_url': convert_google_drive_url(mapped_row['photo_1_url']),
+                        'photo_2_url': convert_google_drive_url(mapped_row['photo_2_url']),
+                        'photo_3_url': convert_google_drive_url(mapped_row['photo_3_url']),
+                        'photo_4_url': convert_google_drive_url(mapped_row['photo_4_url']),
                         'size_table_id': str(mapped_row.get('size_table_id') or 'outerwear_standard'),
                         'is_active': is_active
                     })
@@ -218,7 +247,7 @@ class GoogleSheetsService:
                 
                 if str(mapped_row['product_id']) == product_id:
                     is_active = str(mapped_row.get('is_active', 'ДА')).upper() in ['ДА', 'TRUE', 'YES', '1']
-                    
+
                     product = {
                         'product_id': str(mapped_row['product_id']),
                         'category': str(mapped_row['category']),
@@ -226,11 +255,11 @@ class GoogleSheetsService:
                         'description': mapped_row['description'],
                         'wb_link': mapped_row['wb_link'],
                         'available_sizes': mapped_row['available_sizes'],
-                        'collage_url': mapped_row['collage_url'],
-                        'photo_1_url': mapped_row['photo_1_url'],
-                        'photo_2_url': mapped_row['photo_2_url'],
-                        'photo_3_url': mapped_row['photo_3_url'],
-                        'photo_4_url': mapped_row['photo_4_url'],
+                        'collage_url': convert_google_drive_url(mapped_row['collage_url']),
+                        'photo_1_url': convert_google_drive_url(mapped_row['photo_1_url']),
+                        'photo_2_url': convert_google_drive_url(mapped_row['photo_2_url']),
+                        'photo_3_url': convert_google_drive_url(mapped_row['photo_3_url']),
+                        'photo_4_url': convert_google_drive_url(mapped_row['photo_4_url']),
                         'size_table_id': str(mapped_row.get('size_table_id') or 'outerwear_standard'),
                         'is_active': is_active
                     }
