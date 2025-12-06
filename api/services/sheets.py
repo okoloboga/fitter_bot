@@ -173,14 +173,17 @@ class GoogleSheetsService:
         Returns:
             Словарь с английскими ключами
         """
+        # Очищаем ключи от лишних пробелов, которые могут появиться в Google Sheets
+        cleaned_row = {k.strip(): v for k, v in row.items()}
+        
         result = {}
         for rus_name, eng_key in mapping.items():
             # Пробуем получить значение по русскому названию
-            if rus_name in row:
-                result[eng_key] = row[rus_name]
+            if rus_name in cleaned_row:
+                result[eng_key] = cleaned_row[rus_name]
             # Если не нашли, пробуем по английскому ключу (для обратной совместимости)
-            elif eng_key in row:
-                result[eng_key] = row[eng_key]
+            elif eng_key in cleaned_row:
+                result[eng_key] = cleaned_row[eng_key]
             else:
                 result[eng_key] = None
         
