@@ -333,7 +333,6 @@ class GoogleSheetsService:
         try:
             worksheet = self.spreadsheet.worksheet("Размеры")
             records = worksheet.get_all_records()
-            logger.info(f"Read {len(records)} records from 'Размеры' sheet: {records}")
 
             size_table = []
             for row in records:
@@ -376,7 +375,6 @@ class GoogleSheetsService:
                         size_entry[min_key] = int(min_val) if min_val not in [None, ''] else None
                         size_entry[max_key] = int(max_val) if max_val not in [None, ''] else None
 
-                    logger.info(f"Constructed size_entry for size {size_entry.get('size')}: {size_entry}")
                     size_table.append(size_entry)
 
             # Сохранение в кеш

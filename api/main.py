@@ -19,14 +19,6 @@ sheets_logger = logging.getLogger("api.services.sheets")
 sheets_logger.setLevel(logging.INFO)
 sheets_logger.propagate = True
 
-matcher_logger = logging.getLogger("api.services.size_matcher")
-matcher_logger.setLevel(logging.INFO)
-matcher_logger.propagate = True
-
-recommend_router_logger = logging.getLogger("api.routers.size_recommend")
-recommend_router_logger.setLevel(logging.INFO)
-recommend_router_logger.propagate = True
-
 
 logger = logging.getLogger(__name__)
 

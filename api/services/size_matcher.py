@@ -43,13 +43,7 @@ class SizeMatcherService:
         Returns:
             Dict с рекомендацией размера
         """
-        logger.warning("--- Starting Size Recommendation ---")
-        logger.info(f"User Measurements: {user_measurements}")
-        logger.info(f"Available Sizes for Product: {available_sizes}")
-        logger.info(f"Received Size Table with {len(size_table)} rows.")
-
         if not user_measurements:
-            logger.warning("No user measurements provided.")
             return {
                 "success": False,
                 "message": "📐 Укажи свои параметры, чтобы получить рекомендацию по размеру",
@@ -60,7 +54,6 @@ class SizeMatcherService:
             }
 
         if not size_table:
-            logger.warning("Size table is empty.")
             return {
                 "success": False,
                 "message": "⚠️ Таблица размеров не найдена",
@@ -72,10 +65,8 @@ class SizeMatcherService:
 
         # Фильтруем таблицу размеров по доступным размерам
         filtered_table = [row for row in size_table if row['size'] in available_sizes]
-        logger.info(f"Filtered size table contains {len(filtered_table)} rows for available sizes.")
 
         if not filtered_table:
-            logger.warning("Filtered size table is empty. No matching sizes found in the size table for the available sizes.")
             return {
                 "success": False,
                 "message": "⚠️ Не удалось подобрать размер. Рекомендуем уточнить у продавца",
@@ -87,10 +78,9 @@ class SizeMatcherService:
 
         # Подсчет совпадений для каждого размера
         size_scores = []
-        logger.info("--- Calculating Scores for Each Size ---")
+
         for row in filtered_table:
             score, matched_params = self._calculate_match_score(user_measurements, row)
-            logger.info(f"Size: {row.get('size')}, Score: {score}, Matched Params: {matched_params}")
             size_scores.append({
                 'size': row['size'],
                 'score': score,
@@ -100,10 +90,8 @@ class SizeMatcherService:
 
         # Сортируем по количеству совпадений
         size_scores.sort(key=lambda x: x['score'], reverse=True)
-        logger.info(f"Sorted Scores: {[ (s['size'], s['score']) for s in size_scores ]}")
 
         if not size_scores or size_scores[0]['score'] == 0:
-            logger.warning("No size got a score greater than 0.")
             return {
                 "success": False,
                 "message": "⚠️ Не удалось подобрать размер. Рекомендуем уточнить у продавца",
@@ -120,10 +108,8 @@ class SizeMatcherService:
 
         # Подсчитываем максимально возможный score (параметры, которые есть и у пользователя и в таблице)
         max_possible_score = self._get_max_possible_score(user_measurements, best_match['row'])
-        logger.info(f"Best match: {recommended_size} with score {score}. Max possible score: {max_possible_score}")
 
         if max_possible_score == 0:
-            logger.warning("Max possible score is 0. No common parameters between user and size table.")
             return {
                 "success": False,
                 "message": "⚠️ Нет общих параметров для сравнения. Рекомендуем заполнить больше данных",
@@ -140,7 +126,7 @@ class SizeMatcherService:
 
         # Определяем уровень confidence
         confidence_ratio = score / max_possible_score if max_possible_score > 0 else 0
-        
+
         if confidence_ratio == 1.0:
             confidence = "high"
             if alternative_size:
@@ -156,9 +142,6 @@ class SizeMatcherService:
         else:
             confidence = "low"
             message = f"⚠️ Возможный размер: {recommended_size}, но рекомендуем уточнить у продавца"
-
-        logger.info(f"Final Recommendation: size={recommended_size}, alt_size={alternative_size}, confidence={confidence_ratio:.2f}")
-        logger.info("--- End of Size Recommendation ---")
 
         return {
             "success": True,

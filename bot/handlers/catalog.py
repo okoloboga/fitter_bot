@@ -1,7 +1,6 @@
 """
 Обработчики каталога товаров
 """
-import logging
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InputMediaPhoto, URLInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 from typing import Optional, List
@@ -14,7 +13,6 @@ from bot.keyboards.catalog import (
 from bot.utils.api_client import api_client
 
 router = Router()
-logger = logging.getLogger(__name__)
 
 
 def get_valid_photo_url(product: dict) -> Optional[str]:
@@ -76,9 +74,7 @@ async def format_product_message(product: dict, user_id: int, current_index: int
     size_recommendation = ""
 
     if measurements:
-        logger.info(f"User {user_id} has measurements. Requesting size recommendation for product {product['product_id']}...")
         recommendation = await api_client.recommend_size(user_id, product['product_id'])
-        logger.info(f"Received recommendation for user {user_id}, product {product['product_id']}: {recommendation}")
         if recommendation and recommendation.get('success') and recommendation.get('recommended_size'):
             size_recommendation = f"\n\n✅ Рекомендуемый размер: {recommendation['recommended_size']}"
             # Optionally, add alternative size if available
@@ -86,12 +82,11 @@ async def format_product_message(product: dict, user_id: int, current_index: int
                 size_recommendation += f" (возможно, подойдет {recommendation['alternative_size']})"
         elif recommendation:
             # Use the message from the recommendation service if it fails
-            size_recommendation = f"\n\n{recommendation.get('message', '⚠️ Не удалось подобрать размер')}"
+            size_recommendation = f"\n\n⚠️ {recommendation.get('message', 'Не удалось подобрать размер')}"
         else:
             # Fallback if API call fails
             size_recommendation = "\n\n⚠️ Не удалось получить рекомендацию по размеру"
     else:
-        logger.info(f"User {user_id} does not have measurements. Skipping size recommendation.")
         size_recommendation = "\n\n📐 Укажи свои параметры, чтобы получить рекомендацию по размеру"
 
     # Ограничиваем описание (Telegram caption max 1024 символов)
@@ -135,17 +130,14 @@ async def show_category_products(callback: CallbackQuery):
     """Показать товары категории"""
     category_id = callback.data.split(":")[1]
     user_id = callback.from_user.id
-    logger.info(f"User {user_id} selected category '{category_id}'. Fetching products...")
 
     products = await api_client.get_products_by_category(category_id)
-    logger.info(f"Found {len(products)} products in category '{category_id}'.")
 
     if not products:
         await callback.answer("В этой категории пока нет товаров", show_alert=True)
         return
 
     product = products[0]
-    logger.info(f"Formatting message for product_id: {product.get('product_id')}")
     message_text = await format_product_message(product, user_id, 0, len(products))
     is_fav = await api_client.check_favorite(user_id, product['product_id'])
 
