@@ -91,6 +91,8 @@ class Product(BaseModel):
     photo_2_url: str
     photo_3_url: str
     photo_4_url: str
+    photo_5_url: str
+    photo_6_url: str
     size_table_id: str
 
 

@@ -25,6 +25,8 @@ def get_valid_photo_url(product: dict) -> Optional[str]:
     3. photo_2_url
     4. photo_3_url
     5. photo_4_url
+    6. photo_5_url
+    7. photo_6_url
 
     Returns:
         Валидный URL или None, если все URL пустые
@@ -35,6 +37,8 @@ def get_valid_photo_url(product: dict) -> Optional[str]:
         product.get('photo_2_url'),
         product.get('photo_3_url'),
         product.get('photo_4_url'),
+        product.get('photo_5_url'),
+        product.get('photo_6_url'),
     ]
 
     for url in urls_to_try:
@@ -57,6 +61,8 @@ def get_all_valid_photo_urls(product: dict) -> List[str]:
         product.get('photo_2_url'),
         product.get('photo_3_url'),
         product.get('photo_4_url'),
+        product.get('photo_5_url'),
+        product.get('photo_6_url'),
     ]
 
     return [url for url in urls if url and isinstance(url, str) and url.strip() and url != ""]

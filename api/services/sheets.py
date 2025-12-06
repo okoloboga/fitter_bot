@@ -73,6 +73,8 @@ class GoogleSheetsService:
         'Фото 2': 'photo_2_url',
         'Фото 3': 'photo_3_url',
         'Фото 4': 'photo_4_url',
+        'Фото 5': 'photo_5_url',
+        'Фото 6': 'photo_6_url',
         'Коллаж': 'collage_url',
         'Активен': 'is_active',
         'Таблица размеров': 'size_table_id'
@@ -224,6 +226,8 @@ class GoogleSheetsService:
                         'photo_2_url': convert_google_drive_url(mapped_row['photo_2_url']),
                         'photo_3_url': convert_google_drive_url(mapped_row['photo_3_url']),
                         'photo_4_url': convert_google_drive_url(mapped_row['photo_4_url']),
+                        'photo_5_url': convert_google_drive_url(mapped_row['photo_5_url']),
+                        'photo_6_url': convert_google_drive_url(mapped_row['photo_6_url']),
                         'size_table_id': str(mapped_row.get('size_table_id') or 'outerwear_standard'),
                         'is_active': is_active
                     })
@@ -268,6 +272,8 @@ class GoogleSheetsService:
                         'photo_2_url': convert_google_drive_url(mapped_row['photo_2_url']),
                         'photo_3_url': convert_google_drive_url(mapped_row['photo_3_url']),
                         'photo_4_url': convert_google_drive_url(mapped_row['photo_4_url']),
+                        'photo_5_url': convert_google_drive_url(mapped_row['photo_5_url']),
+                        'photo_6_url': convert_google_drive_url(mapped_row['photo_6_url']),
                         'size_table_id': str(mapped_row.get('size_table_id') or 'outerwear_standard'),
                         'is_active': is_active
                     }
