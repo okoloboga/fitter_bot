@@ -7,6 +7,7 @@ from aiogram.types import Message, CallbackQuery, URLInputFile, InputMediaPhoto
 from bot.keyboards.catalog import get_favorites_product_keyboard, get_go_to_catalog_keyboard
 from bot.keyboards.main_menu import get_main_menu
 from bot.utils.api_client import api_client
+from bot.handlers.catalog import get_valid_photo_url
 
 router = Router()
 
@@ -14,16 +15,33 @@ router = Router()
 async def format_favorite_product_message(product: dict, user_id: int, current_index: int, total_count: int):
     """Форматировать сообщение карточки товара в избранном"""
     measurements = await api_client.get_measurements(user_id)
+    size_recommendation = ""
 
     if measurements:
-        # TODO: Integrate with actual size recommendation logic
-        size_recommendation = "\n\n✅ Рекомендуемый размер: M"
+        recommendation = await api_client.recommend_size(user_id, product['product_id'])
+        if recommendation and recommendation.get('success') and recommendation.get('recommended_size'):
+            size_recommendation = f"\n\n✅ Рекомендуемый размер: {recommendation['recommended_size']}"
+            # Optionally, add alternative size if available
+            if recommendation.get('alternative_size'):
+                size_recommendation += f" (возможно, подойдет {recommendation['alternative_size']})"
+        elif recommendation:
+            # Use the message from the recommendation service if it fails
+            size_recommendation = f"\n\n{recommendation.get('message', '⚠️ Не удалось подобрать размер')}"
+        else:
+            # Fallback if API call fails
+            size_recommendation = "\n\n⚠️ Не удалось получить рекомендацию по размеру"
     else:
         size_recommendation = "\n\n📐 Укажи свои параметры, чтобы получить рекомендацию по размеру"
 
+    # Ограничиваем описание (Telegram caption max 1024 символов)
+    description = product.get('description', '')
+    max_description_length = 600
+    if len(description) > max_description_length:
+        description = description[:max_description_length].rsplit(' ', 1)[0] + '...'
+
     message_text = f"""🧥 {product.get('name', 'Без названия')}
 
-{product.get('description', '')}
+{description}
 
 Размеры: {product.get('available_sizes', 'Нет данных')}{size_recommendation}
 
@@ -61,11 +79,19 @@ async def show_favorites(callback: CallbackQuery):
     message_text = await format_favorite_product_message(product, user_id, 0, len(favorites))
 
     await callback.message.delete()
-    await callback.message.answer_photo(
-        photo=URLInputFile(product['collage_url']),
-        caption=message_text,
-        reply_markup=get_favorites_product_keyboard(product_id, 0, len(favorites))
-    )
+
+    photo_url = get_valid_photo_url(product)
+    if photo_url:
+        await callback.message.answer_photo(
+            photo=URLInputFile(photo_url),
+            caption=message_text,
+            reply_markup=get_favorites_product_keyboard(product_id, 0, len(favorites))
+        )
+    else:
+        await callback.message.answer(
+            f"📷 Фото недоступно\n\n{message_text}",
+            reply_markup=get_favorites_product_keyboard(product_id, 0, len(favorites))
+        )
     await callback.answer()
 
 
@@ -178,11 +204,22 @@ async def navigate_favorites(callback: CallbackQuery):
         return
 
     message_text = await format_favorite_product_message(product, user_id, new_index, len(favorites))
+    photo_url = get_valid_photo_url(product)
+
+    if not photo_url:
+        # If no photo, we can't use edit_media, so we delete and send a new message
+        await callback.message.delete()
+        await callback.message.answer(
+            f"📷 Фото недоступно\n\n{message_text}",
+            reply_markup=get_favorites_product_keyboard(product_id, new_index, len(favorites))
+        )
+        await callback.answer()
+        return
 
     try:
         await callback.message.edit_media(
             media=InputMediaPhoto(
-                media=URLInputFile(product['collage_url']),
+                media=URLInputFile(photo_url),
                 caption=message_text
             ),
             reply_markup=get_favorites_product_keyboard(product_id, new_index, len(favorites))
@@ -190,7 +227,7 @@ async def navigate_favorites(callback: CallbackQuery):
     except:
         await callback.message.delete()
         await callback.message.answer_photo(
-            photo=URLInputFile(product['collage_url']),
+            photo=URLInputFile(photo_url),
             caption=message_text,
             reply_markup=get_favorites_product_keyboard(product_id, new_index, len(favorites))
         )
@@ -246,9 +283,17 @@ async def back_to_favorite_product(callback: CallbackQuery):
     message_text = await format_favorite_product_message(product, user_id, index, len(favorites))
 
     await callback.message.delete()
-    await callback.message.answer_photo(
-        photo=URLInputFile(product['collage_url']),
-        caption=message_text,
-        reply_markup=get_favorites_product_keyboard(product_id, index, len(favorites))
-    )
+    
+    photo_url = get_valid_photo_url(product)
+    if photo_url:
+        await callback.message.answer_photo(
+            photo=URLInputFile(photo_url),
+            caption=message_text,
+            reply_markup=get_favorites_product_keyboard(product_id, index, len(favorites))
+        )
+    else:
+        await callback.message.answer(
+            f"📷 Фото недоступно\n\n{message_text}",
+            reply_markup=get_favorites_product_keyboard(product_id, index, len(favorites))
+        )
     await callback.answer()
