@@ -103,6 +103,7 @@ class Product(BaseModel):
     name: str
     description: str
     wb_link: str
+    ozon_url: Optional[str] = None
     available_sizes: str
     collage_url: str
     photo_1_url: str
@@ -111,7 +112,6 @@ class Product(BaseModel):
     photo_4_url: str
     photo_5_url: str
     photo_6_url: str
-    size_table_id: str
 
 
 class Category(BaseModel):
