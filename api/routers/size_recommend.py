@@ -42,8 +42,11 @@ async def recommend_size(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    # Получаем таблицу размеров
-    size_table_id = product.get('size_table_id', 'outerwear_standard')
+    # Получаем таблицу размеров по категории товара
+    size_table_id = product.get('category')
+    if not size_table_id:
+        raise HTTPException(status_code=404, detail="Product category not found, cannot determine size table")
+
     size_table = sheets_service.get_size_table(size_table_id)
 
     if not size_table:
@@ -52,19 +55,17 @@ async def recommend_size(
             recommended_size=None,
             alternative_size=None,
             confidence="none",
-            message="⚠️ Таблица размеров не найдена",
-            details={"reason": "no_size_table"}
+            message="⚠️ Таблица размеров для данной категории не найдена",
+            details={"reason": "no_size_table_for_category"}
         )
 
     # Парсим доступные размеры
-    available_sizes = [s.strip() for s in product['available_sizes'].split(',')]
+    available_sizes = [s.strip() for s in product.get('available_sizes', '').split(',') if s.strip()]
 
     # Параметры пользователя в виде словаря
     user_measurements_dict = {
-        'height': measurements.height,
-        'chest': measurements.chest,
-        'waist': measurements.waist,
-        'hips': measurements.hips
+        param: getattr(measurements, param, None)
+        for param in size_matcher_service.ALL_PARAMS
     }
 
     # Подбираем размер

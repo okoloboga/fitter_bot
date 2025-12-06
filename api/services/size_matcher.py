@@ -177,7 +177,7 @@ class SizeMatcherService:
             # Для строковых параметров (например russian_size) - точное совпадение
             if param == 'russian_size':
                 table_val = size_row.get('russian_size')
-                if table_val and str(user_val).strip() == str(table_val).strip():
+                if self._check_russian_size_match(user_val, table_val):
                     score += 1
                     matched_params.append(param)
                 continue
@@ -201,6 +201,34 @@ class SizeMatcherService:
                 continue
 
         return score, matched_params
+
+    def _check_russian_size_match(self, user_size: any, table_size: any) -> bool:
+        """
+        Проверяет совпадение российского размера, поддерживая диапазоны.
+        Пример: user_size="42", table_size="42-44" -> True
+        """
+        if user_size is None or table_size is None:
+            return False
+
+        try:
+            user_size_val = int(str(user_size).strip())
+            table_size_str = str(table_size).strip()
+
+            # Если в таблице диапазон (e.g., "42-44")
+            if '-' in table_size_str:
+                parts = table_size_str.split('-')
+                if len(parts) == 2:
+                    start = int(parts[0].strip())
+                    end = int(parts[1].strip())
+                    return start <= user_size_val <= end
+            # Если в таблице одно число
+            else:
+                return user_size_val == int(table_size_str)
+        except (ValueError, TypeError):
+            # Если не удалось преобразовать в числа, сравниваем как строки
+            return str(user_size).strip().lower() == str(table_size).strip().lower()
+
+        return False
 
     def _get_max_possible_score(self, user_measurements: Dict[str, any], size_row: Dict) -> int:
         """
