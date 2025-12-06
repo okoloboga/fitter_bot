@@ -2,12 +2,13 @@
 Обработчики раздела избранного
 """
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, URLInputFile, InputMediaPhoto
+from aiogram.types import Message, CallbackQuery, URLInputFile, InputMediaPhoto, BufferedInputFile
 
 from bot.keyboards.catalog import get_favorites_product_keyboard, get_go_to_catalog_keyboard
 from bot.keyboards.main_menu import get_main_menu
 from bot.utils.api_client import api_client
 from bot.handlers.catalog import get_valid_photo_url
+from bot.utils.image_processor import get_optimized_photo
 
 router = Router()
 
@@ -82,11 +83,18 @@ async def show_favorites(callback: CallbackQuery):
 
     photo_url = get_valid_photo_url(product)
     if photo_url:
-        await callback.message.answer_photo(
-            photo=URLInputFile(photo_url),
-            caption=message_text,
-            reply_markup=get_favorites_product_keyboard(product, 0, len(favorites))
-        )
+        optimized_photo = await get_optimized_photo(photo_url)
+        if optimized_photo:
+            await callback.message.answer_photo(
+                photo=optimized_photo,
+                caption=message_text,
+                reply_markup=get_favorites_product_keyboard(product, 0, len(favorites))
+            )
+        else:
+            await callback.message.answer(
+                f"📷 Не удалось загрузить фото\n\n{message_text}",
+                reply_markup=get_favorites_product_keyboard(product, 0, len(favorites))
+            )
     else:
         await callback.message.answer(
             f"📷 Фото недоступно\n\n{message_text}",
@@ -164,9 +172,14 @@ async def remove_favorite(callback: CallbackQuery):
                         )
                         return
 
+                    optimized_photo = await get_optimized_photo(photo_url)
+                    if not optimized_photo:
+                        await callback.answer("Не удалось загрузить фото товара", show_alert=True)
+                        return
+
                     await callback.message.edit_media(
                         media=InputMediaPhoto(
-                            media=URLInputFile(photo_url),
+                            media=optimized_photo,
                             caption=message_text
                         ),
                         reply_markup=get_favorites_product_keyboard(product, 0, len(favorites))
@@ -226,10 +239,15 @@ async def navigate_favorites(callback: CallbackQuery):
         await callback.answer()
         return
 
+    optimized_photo = await get_optimized_photo(photo_url)
+    if not optimized_photo:
+        await callback.answer("Не удалось загрузить фото товара", show_alert=True)
+        return
+
     try:
         await callback.message.edit_media(
             media=InputMediaPhoto(
-                media=URLInputFile(photo_url),
+                media=optimized_photo,
                 caption=message_text
             ),
             reply_markup=get_favorites_product_keyboard(product, new_index, len(favorites))
@@ -237,7 +255,7 @@ async def navigate_favorites(callback: CallbackQuery):
     except:
         await callback.message.delete()
         await callback.message.answer_photo(
-            photo=URLInputFile(photo_url),
+            photo=optimized_photo,
             caption=message_text,
             reply_markup=get_favorites_product_keyboard(product, new_index, len(favorites))
         )
@@ -296,11 +314,18 @@ async def back_to_favorite_product(callback: CallbackQuery):
     
     photo_url = get_valid_photo_url(product)
     if photo_url:
-        await callback.message.answer_photo(
-            photo=URLInputFile(photo_url),
-            caption=message_text,
-            reply_markup=get_favorites_product_keyboard(product, index, len(favorites))
-        )
+        optimized_photo = await get_optimized_photo(photo_url)
+        if optimized_photo:
+            await callback.message.answer_photo(
+                photo=optimized_photo,
+                caption=message_text,
+                reply_markup=get_favorites_product_keyboard(product, index, len(favorites))
+            )
+        else:
+            await callback.message.answer(
+                f"📷 Не удалось загрузить фото\n\n{message_text}",
+                reply_markup=get_favorites_product_keyboard(product, index, len(favorites))
+            )
     else:
         await callback.message.answer(
             f"📷 Фото недоступно\n\n{message_text}",
