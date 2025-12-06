@@ -12,7 +12,7 @@ from typing import List, Optional, Dict
 logger = logging.getLogger(__name__)
 
 
-def convert_google_drive_url(url: str) -> str:
+def convert_google_drive_url(url: str) -> Optional[str]:
     """
     Конвертирует Google Drive ссылку из формата для просмотра в формат прямой ссылки.
 
@@ -23,10 +23,14 @@ def convert_google_drive_url(url: str) -> str:
         url: Исходная ссылка Google Drive
 
     Returns:
-        Преобразованная ссылка или исходная, если не удалось преобразовать
+        Преобразованная ссылка или None, если URL пустой
     """
-    if not url or not isinstance(url, str):
-        return url
+    # Проверяем на None, пустую строку или строку только с пробелами
+    if not url or not isinstance(url, str) or not url.strip():
+        logger.warning(f"Empty or invalid URL received: {repr(url)}")
+        return None
+
+    url = url.strip()
 
     # Паттерн для извлечения ID файла из ссылки Google Drive
     pattern = r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)'
@@ -34,9 +38,12 @@ def convert_google_drive_url(url: str) -> str:
 
     if match:
         file_id = match.group(1)
-        return f"https://drive.google.com/uc?export=view&id={file_id}"
+        converted_url = f"https://drive.google.com/uc?export=view&id={file_id}"
+        logger.debug(f"Converted Google Drive URL: {url} -> {converted_url}")
+        return converted_url
 
     # Если ссылка уже в правильном формате или не является Google Drive ссылкой
+    logger.debug(f"URL passed through without conversion: {url}")
     return url
 
 # Кеш для данных из Google Sheets

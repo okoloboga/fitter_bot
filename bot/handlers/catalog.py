@@ -3,6 +3,7 @@
 """
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InputMediaPhoto, URLInputFile, InlineKeyboardMarkup, InlineKeyboardButton
+from typing import Optional, List
 
 from bot.keyboards.catalog import (
     get_categories_keyboard,
@@ -12,6 +13,52 @@ from bot.keyboards.catalog import (
 from bot.utils.api_client import api_client
 
 router = Router()
+
+
+def get_valid_photo_url(product: dict) -> Optional[str]:
+    """
+    Получить валидный URL фото товара с fallback логикой.
+
+    Приоритет:
+    1. collage_url
+    2. photo_1_url
+    3. photo_2_url
+    4. photo_3_url
+    5. photo_4_url
+
+    Returns:
+        Валидный URL или None, если все URL пустые
+    """
+    urls_to_try = [
+        product.get('collage_url'),
+        product.get('photo_1_url'),
+        product.get('photo_2_url'),
+        product.get('photo_3_url'),
+        product.get('photo_4_url'),
+    ]
+
+    for url in urls_to_try:
+        if url and isinstance(url, str) and url.strip():
+            return url
+
+    return None
+
+
+def get_all_valid_photo_urls(product: dict) -> List[str]:
+    """
+    Получить все валидные URL фотографий товара.
+
+    Returns:
+        Список валидных URL
+    """
+    urls = [
+        product.get('photo_1_url'),
+        product.get('photo_2_url'),
+        product.get('photo_3_url'),
+        product.get('photo_4_url'),
+    ]
+
+    return [url for url in urls if url and isinstance(url, str) and url.strip()]
 
 
 async def format_product_message(product: dict, user_id: int, current_index: int, total_count: int):
@@ -86,17 +133,31 @@ async def show_category_products(callback: CallbackQuery):
     except:
         pass
 
-    await callback.message.answer_photo(
-        photo=URLInputFile(product['collage_url']),
-        caption=message_text,
-        reply_markup=get_product_keyboard(
-            product,
-            category_id,
-            0,
-            len(products),
-            is_fav
+    photo_url = get_valid_photo_url(product)
+    if photo_url:
+        await callback.message.answer_photo(
+            photo=URLInputFile(photo_url),
+            caption=message_text,
+            reply_markup=get_product_keyboard(
+                product,
+                category_id,
+                0,
+                len(products),
+                is_fav
+            )
         )
-    )
+    else:
+        # Fallback: отправить текстовое сообщение, если нет фото
+        await callback.message.answer(
+            f"📷 Фото недоступно\n\n{message_text}",
+            reply_markup=get_product_keyboard(
+                product,
+                category_id,
+                0,
+                len(products),
+                is_fav
+            )
+        )
     await callback.answer()
 
 
@@ -123,10 +184,15 @@ async def navigate_products(callback: CallbackQuery):
     message_text = await format_product_message(product, user_id, new_index, len(products))
     is_fav = await api_client.check_favorite(user_id, product['product_id'])
 
+    photo_url = get_valid_photo_url(product)
+    if not photo_url:
+        await callback.answer("Фото товара недоступно", show_alert=True)
+        return
+
     try:
         await callback.message.edit_media(
             media=InputMediaPhoto(
-                media=URLInputFile(product['collage_url']),
+                media=URLInputFile(photo_url),
                 caption=message_text
             ),
             reply_markup=get_product_keyboard(
@@ -140,7 +206,7 @@ async def navigate_products(callback: CallbackQuery):
     except Exception:
         await callback.message.delete()
         await callback.message.answer_photo(
-            photo=URLInputFile(product['collage_url']),
+            photo=URLInputFile(photo_url),
             caption=message_text,
             reply_markup=get_product_keyboard(
                 product,
@@ -166,12 +232,12 @@ async def show_all_photos(callback: CallbackQuery):
         await callback.answer("Товар не найден", show_alert=True)
         return
 
-    media = [
-        InputMediaPhoto(media=URLInputFile(product['photo_1_url'])),
-        InputMediaPhoto(media=URLInputFile(product['photo_2_url'])),
-        InputMediaPhoto(media=URLInputFile(product['photo_3_url'])),
-        InputMediaPhoto(media=URLInputFile(product['photo_4_url'])),
-    ]
+    photo_urls = get_all_valid_photo_urls(product)
+    if not photo_urls:
+        await callback.answer("Фотографии товара недоступны", show_alert=True)
+        return
+
+    media = [InputMediaPhoto(media=URLInputFile(url)) for url in photo_urls]
 
     await callback.message.answer_media_group(media=media)
     await callback.message.answer(
@@ -201,17 +267,32 @@ async def back_to_product(callback: CallbackQuery):
     is_fav = await api_client.check_favorite(user_id, product_id)
 
     await callback.message.delete()
-    await callback.message.answer_photo(
-        photo=URLInputFile(product['collage_url']),
-        caption=message_text,
-        reply_markup=get_product_keyboard(
-            product,
-            category_id,
-            index,
-            len(products),
-            is_fav
+
+    photo_url = get_valid_photo_url(product)
+    if photo_url:
+        await callback.message.answer_photo(
+            photo=URLInputFile(photo_url),
+            caption=message_text,
+            reply_markup=get_product_keyboard(
+                product,
+                category_id,
+                index,
+                len(products),
+                is_fav
+            )
         )
-    )
+    else:
+        # Fallback: отправить текстовое сообщение, если нет фото
+        await callback.message.answer(
+            f"📷 Фото недоступно\n\n{message_text}",
+            reply_markup=get_product_keyboard(
+                product,
+                category_id,
+                index,
+                len(products),
+                is_fav
+            )
+        )
     await callback.answer()
 
 
