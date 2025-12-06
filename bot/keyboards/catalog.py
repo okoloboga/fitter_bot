@@ -49,7 +49,7 @@ def get_product_keyboard(product: Dict, category_id: str, current_index: int,
             callback_data=f"fav:{fav_action}:{product_id}"
         ),
         InlineKeyboardButton(
-            text="Все фото",
+            text="📸 Все фото",
             callback_data=f"photos:{product_id}:{category_id}:{current_index}"
         )
     ])
@@ -138,7 +138,7 @@ def get_favorites_product_keyboard(product: Dict, current_index: int, total_coun
             callback_data=f"fav:remove:{product_id}"
         ),
         InlineKeyboardButton(
-            text="Все фото",
+            text="📸 Все фото",
             callback_data=f"photos_fav:{product_id}:{current_index}"
         )
     ])
