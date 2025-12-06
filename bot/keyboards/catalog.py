@@ -1,8 +1,11 @@
 """
 Клавиатуры для каталога товаров
 """
+import logging
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from typing import List, Dict
+
+logger = logging.getLogger(__name__)
 
 
 def get_categories_keyboard(categories: List[Dict]):
@@ -35,6 +38,7 @@ def get_categories_keyboard(categories: List[Dict]):
 def get_product_keyboard(product: Dict, category_id: str, current_index: int,
                          total_count: int, is_favorite: bool = False):
     """Клавиатура для карточки товара"""
+    logger.info(f"get_product_keyboard received product data: {product}")
 
     fav_button_text = "❌ Убрать из избранного" if is_favorite else "⭐️ В избранное"
     fav_action = "remove" if is_favorite else "add"
@@ -58,6 +62,7 @@ def get_product_keyboard(product: Dict, category_id: str, current_index: int,
     marketplace_row = []
     wb_link = product.get('wb_link')
     ozon_link = product.get('ozon_url')
+    logger.info(f"Checking marketplace links. WB: '{wb_link}', Ozon: '{ozon_link}'")
 
     if wb_link and isinstance(wb_link, str) and wb_link.strip():
         marketplace_row.append(InlineKeyboardButton(
@@ -66,10 +71,13 @@ def get_product_keyboard(product: Dict, category_id: str, current_index: int,
         ))
     
     if ozon_link and isinstance(ozon_link, str) and ozon_link.strip():
+        logger.info("Ozon link is valid, creating button.")
         marketplace_row.append(InlineKeyboardButton(
             text="Ozon",
             url=ozon_link
         ))
+    else:
+        logger.info("Ozon link is invalid or empty, skipping button.")
     
     if marketplace_row:
         buttons.append(marketplace_row)
@@ -127,6 +135,7 @@ def get_back_to_product_keyboard(product_id: str, category_id: str, index: int):
 
 def get_favorites_product_keyboard(product: Dict, current_index: int, total_count: int):
     """Клавиатура для товара в избранном"""
+    logger.info(f"get_favorites_product_keyboard received product data: {product}")
     product_id = product['product_id']
     
     buttons = []
@@ -147,6 +156,7 @@ def get_favorites_product_keyboard(product: Dict, current_index: int, total_coun
     marketplace_row = []
     wb_link = product.get('wb_link')
     ozon_link = product.get('ozon_url')
+    logger.info(f"Checking marketplace links for favorite. WB: '{wb_link}', Ozon: '{ozon_link}'")
 
     if wb_link and isinstance(wb_link, str) and wb_link.strip():
         marketplace_row.append(InlineKeyboardButton(
@@ -155,10 +165,13 @@ def get_favorites_product_keyboard(product: Dict, current_index: int, total_coun
         ))
     
     if ozon_link and isinstance(ozon_link, str) and ozon_link.strip():
+        logger.info("Ozon link is valid for favorite, creating button.")
         marketplace_row.append(InlineKeyboardButton(
             text="Ozon",
             url=ozon_link
         ))
+    else:
+        logger.info("Ozon link is invalid or empty for favorite, skipping button.")
     
     if marketplace_row:
         buttons.append(marketplace_row)
