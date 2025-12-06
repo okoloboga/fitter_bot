@@ -5,14 +5,16 @@ from aiogram.fsm.state import State, StatesGroup
 
 
 class MeasurementStates(StatesGroup):
-    """Состояния для ввода параметров тела"""
-    waiting_height = State()
-    waiting_chest = State()
-    waiting_waist = State()
-    waiting_hips = State()
-
-    # Состояния для редактирования конкретного параметра
-    editing_height = State()
+    """Состояния для ввода/редактирования параметров тела (каждый отдельно)"""
+    editing_russian_size = State()
+    editing_shoulder_length = State()
+    editing_back_width = State()
+    editing_sleeve_length = State()
+    editing_back_length = State()
     editing_chest = State()
     editing_waist = State()
     editing_hips = State()
+    editing_pants_length = State()
+    editing_waist_girth = State()
+    editing_rise_height = State()
+    editing_back_rise_height = State()

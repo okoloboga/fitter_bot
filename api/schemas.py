@@ -28,19 +28,37 @@ class UserResponse(BaseModel):
 
 # Measurements schemas
 class MeasurementsCreate(BaseModel):
-    height: int = Field(ge=140, le=200)
-    chest: int = Field(ge=70, le=130)
-    waist: int = Field(ge=50, le=110)
-    hips: int = Field(ge=70, le=140)
+    """Схема для создания/обновления параметров (все поля опциональны)"""
+    russian_size: Optional[str] = Field(None, max_length=20)
+    shoulder_length: Optional[int] = Field(None, ge=30, le=60)
+    back_width: Optional[int] = Field(None, ge=30, le=60)
+    sleeve_length: Optional[int] = Field(None, ge=40, le=80)
+    back_length: Optional[int] = Field(None, ge=40, le=100)
+    chest: Optional[int] = Field(None, ge=70, le=150)
+    waist: Optional[int] = Field(None, ge=50, le=130)
+    hips: Optional[int] = Field(None, ge=70, le=160)
+    pants_length: Optional[int] = Field(None, ge=70, le=120)
+    waist_girth: Optional[int] = Field(None, ge=50, le=130)
+    rise_height: Optional[int] = Field(None, ge=15, le=40)
+    back_rise_height: Optional[int] = Field(None, ge=15, le=50)
 
 
 class MeasurementsResponse(BaseModel):
+    """Схема для ответа с параметрами пользователя"""
     id: int
     user_id: int
-    height: int
-    chest: int
-    waist: int
-    hips: int
+    russian_size: Optional[str]
+    shoulder_length: Optional[int]
+    back_width: Optional[int]
+    sleeve_length: Optional[int]
+    back_length: Optional[int]
+    chest: Optional[int]
+    waist: Optional[int]
+    hips: Optional[int]
+    pants_length: Optional[int]
+    waist_girth: Optional[int]
+    rise_height: Optional[int]
+    back_rise_height: Optional[int]
     updated_at: datetime
 
     class Config:

@@ -4,20 +4,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
-def get_start_measurements_keyboard():
-    """Клавиатура для начала ввода параметров"""
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text="✏️ Указать параметры",
-            callback_data="measurements:start"
-        )],
-        [InlineKeyboardButton(
-            text="◀️ В главное меню",
-            callback_data="main_menu"
-        )]
-    ])
-
-
 def get_cancel_keyboard():
     """Клавиатура с кнопкой отмены"""
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -28,11 +14,11 @@ def get_cancel_keyboard():
     ])
 
 
-def get_measurements_actions_keyboard():
-    """Клавиатура с действиями над параметрами"""
+def get_measurements_menu_keyboard():
+    """Клавиатура главного меню параметров"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
-            text="✏️ Изменить параметры",
+            text="✏️ Добавить/изменить параметры",
             callback_data="measurements:edit_menu"
         )],
         [InlineKeyboardButton(
@@ -43,17 +29,35 @@ def get_measurements_actions_keyboard():
 
 
 def get_edit_measurements_keyboard():
-    """Клавиатура выбора параметра для редактирования"""
+    """Клавиатура выбора параметра для редактирования (все 12 параметров)"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="📏 Рост", callback_data="measurements:edit:height"),
-            InlineKeyboardButton(text="👚 Грудь", callback_data="measurements:edit:chest")
+            InlineKeyboardButton(text="📏 Рос. размер", callback_data="measurements:edit:russian_size"),
         ],
         [
-            InlineKeyboardButton(text="👖 Талия", callback_data="measurements:edit:waist"),
-            InlineKeyboardButton(text="🍑 Бедра", callback_data="measurements:edit:hips")
+            InlineKeyboardButton(text="👔 Длина плеч", callback_data="measurements:edit:shoulder_length"),
+            InlineKeyboardButton(text="👔 Ширина спины", callback_data="measurements:edit:back_width")
         ],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="measurements:view")]
+        [
+            InlineKeyboardButton(text="👕 Длина рукава", callback_data="measurements:edit:sleeve_length"),
+            InlineKeyboardButton(text="👕 Длина по спинке", callback_data="measurements:edit:back_length")
+        ],
+        [
+            InlineKeyboardButton(text="👚 Обхват груди", callback_data="measurements:edit:chest"),
+            InlineKeyboardButton(text="👖 Обхват талии", callback_data="measurements:edit:waist")
+        ],
+        [
+            InlineKeyboardButton(text="🍑 Обхват бедер", callback_data="measurements:edit:hips"),
+            InlineKeyboardButton(text="👖 Длина брюк", callback_data="measurements:edit:pants_length")
+        ],
+        [
+            InlineKeyboardButton(text="⚡ Обхват в поясе", callback_data="measurements:edit:waist_girth"),
+        ],
+        [
+            InlineKeyboardButton(text="📐 Высота посадки", callback_data="measurements:edit:rise_height"),
+            InlineKeyboardButton(text="📐 Посадка сзади", callback_data="measurements:edit:back_rise_height")
+        ],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="measurements")]
     ])
 
 

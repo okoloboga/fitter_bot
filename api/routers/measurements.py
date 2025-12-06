@@ -19,7 +19,7 @@ async def create_or_update_measurements(
     measurements: MeasurementsCreate,
     db: AsyncSession = Depends(get_db)
 ):
-    """Создать или обновить параметры пользователя по tg_id"""
+    """Создать или обновить параметры пользователя по tg_id (частичное обновление)"""
     # Проверяем существование пользователя
     result = await db.execute(select(User).where(User.tg_id == user_tg_id))
     user = result.scalar_one_or_none()
@@ -33,25 +33,23 @@ async def create_or_update_measurements(
     )
     existing = result.scalar_one_or_none()
 
+    # Получаем только переданные поля (не None)
+    update_data = measurements.model_dump(exclude_unset=True)
+
     if existing:
-        # Обновляем существующие
-        existing.height = measurements.height
-        existing.chest = measurements.chest
-        existing.waist = measurements.waist
-        existing.hips = measurements.hips
+        # Обновляем только переданные поля
+        for field, value in update_data.items():
+            setattr(existing, field, value)
         existing.updated_at = func.now()
 
         await db.commit()
         await db.refresh(existing)
         return existing
     else:
-        # Создаем новые
+        # Создаем новую запись с переданными полями
         new_measurements = UserMeasurement(
             user_id=user_tg_id,
-            height=measurements.height,
-            chest=measurements.chest,
-            waist=measurements.waist,
-            hips=measurements.hips
+            **update_data
         )
 
         db.add(new_measurements)

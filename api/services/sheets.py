@@ -83,14 +83,29 @@ class GoogleSheetsService:
     SIZE_TABLES_MAPPING = {
         'ID таблицы': 'table_id',
         'Размер': 'size',
-        'Рост мин': 'height_min',
-        'Рост макс': 'height_max',
-        'Грудь мин': 'chest_min',
-        'Грудь макс': 'chest_max',
-        'Талия мин': 'waist_min',
-        'Талия макс': 'waist_max',
-        'Бедра мин': 'hips_min',
-        'Бедра макс': 'hips_max'
+        'Российский размер': 'russian_size',
+        'Длина плеч мин': 'shoulder_length_min',
+        'Длина плеч макс': 'shoulder_length_max',
+        'Ширина спины мин': 'back_width_min',
+        'Ширина спины макс': 'back_width_max',
+        'Длина рукава мин': 'sleeve_length_min',
+        'Длина рукава макс': 'sleeve_length_max',
+        'Длина по спинке мин': 'back_length_min',
+        'Длина по спинке макс': 'back_length_max',
+        'Обхват груди мин': 'chest_min',
+        'Обхват груди макс': 'chest_max',
+        'Обхват талии мин': 'waist_min',
+        'Обхват талии макс': 'waist_max',
+        'Обхват бедер мин': 'hips_min',
+        'Обхват бедер макс': 'hips_max',
+        'Длина брюк мин': 'pants_length_min',
+        'Длина брюк макс': 'pants_length_max',
+        'Обхват в поясе мин': 'waist_girth_min',
+        'Обхват в поясе макс': 'waist_girth_max',
+        'Высота посадки мин': 'rise_height_min',
+        'Высота посадки макс': 'rise_height_max',
+        'Высота посадки сзади мин': 'back_rise_height_min',
+        'Высота посадки сзади макс': 'back_rise_height_max'
     }
 
     def __init__(self):
@@ -306,20 +321,32 @@ class GoogleSheetsService:
             for row in records:
                 # Преобразуем русские названия в английские ключи
                 mapped_row = self._map_row(row, self.SIZE_TABLES_MAPPING)
-                
+
                 if mapped_row['table_id'] == table_id:
-                    size_table.append({
+                    size_entry = {
                         'table_id': mapped_row['table_id'],
                         'size': mapped_row['size'],
-                        'height_min': int(mapped_row['height_min']) if mapped_row.get('height_min') else None,
-                        'height_max': int(mapped_row['height_max']) if mapped_row.get('height_max') else None,
-                        'chest_min': int(mapped_row['chest_min']) if mapped_row.get('chest_min') else None,
-                        'chest_max': int(mapped_row['chest_max']) if mapped_row.get('chest_max') else None,
-                        'waist_min': int(mapped_row['waist_min']) if mapped_row.get('waist_min') else None,
-                        'waist_max': int(mapped_row['waist_max']) if mapped_row.get('waist_max') else None,
-                        'hips_min': int(mapped_row['hips_min']) if mapped_row.get('hips_min') else None,
-                        'hips_max': int(mapped_row['hips_max']) if mapped_row.get('hips_max') else None,
-                    })
+                        'russian_size': mapped_row.get('russian_size'),
+                    }
+
+                    # Добавляем все числовые параметры (min/max)
+                    numeric_params = [
+                        'shoulder_length', 'back_width', 'sleeve_length', 'back_length',
+                        'chest', 'waist', 'hips', 'pants_length',
+                        'waist_girth', 'rise_height', 'back_rise_height'
+                    ]
+
+                    for param in numeric_params:
+                        min_key = f'{param}_min'
+                        max_key = f'{param}_max'
+
+                        min_val = mapped_row.get(min_key)
+                        max_val = mapped_row.get(max_key)
+
+                        size_entry[min_key] = int(min_val) if min_val else None
+                        size_entry[max_key] = int(max_val) if max_val else None
+
+                    size_table.append(size_entry)
 
             # Сохранение в кеш
             size_tables_cache[cache_key] = size_table

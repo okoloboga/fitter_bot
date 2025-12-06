@@ -10,9 +10,25 @@ logger = logging.getLogger(__name__)
 class SizeMatcherService:
     """Сервис для подбора размера одежды"""
 
+    # Список всех возможных параметров для сравнения
+    ALL_PARAMS = [
+        'russian_size',
+        'shoulder_length',
+        'back_width',
+        'sleeve_length',
+        'back_length',
+        'chest',
+        'waist',
+        'hips',
+        'pants_length',
+        'waist_girth',
+        'rise_height',
+        'back_rise_height'
+    ]
+
     def recommend_size(
         self,
-        user_measurements: Dict[str, int],
+        user_measurements: Dict[str, any],
         size_table: List[Dict],
         available_sizes: List[str]
     ) -> Dict:
@@ -20,7 +36,7 @@ class SizeMatcherService:
         Подобрать размер на основе параметров пользователя
 
         Args:
-            user_measurements: Параметры пользователя (height, chest, waist, hips)
+            user_measurements: Параметры пользователя (могут быть не все)
             size_table: Таблица размеров из Google Sheets
             available_sizes: Доступные размеры для товара
 
@@ -90,23 +106,34 @@ class SizeMatcherService:
         recommended_size = best_match['size']
         score = best_match['score']
 
-        # Подсчитываем максимально возможный score (учитываем только не-NULL параметры)
-        max_possible_score = len([p for p in ['height', 'chest', 'waist', 'hips']
-                                 if best_match['row'].get(f'{p}_min') is not None])
+        # Подсчитываем максимально возможный score (параметры, которые есть и у пользователя и в таблице)
+        max_possible_score = self._get_max_possible_score(user_measurements, best_match['row'])
+
+        if max_possible_score == 0:
+            return {
+                "success": False,
+                "message": "⚠️ Нет общих параметров для сравнения. Рекомендуем заполнить больше данных",
+                "reason": "no_common_params",
+                "recommended_size": None,
+                "alternative_size": None,
+                "confidence": "none"
+            }
 
         # Альтернативный размер (если есть)
         alternative_size = None
-        if len(size_scores) > 1 and size_scores[1]['score'] >= max_possible_score - 1:
+        if len(size_scores) > 1 and size_scores[1]['score'] >= max(1, max_possible_score - 1):
             alternative_size = size_scores[1]['size']
 
         # Определяем уровень confidence
-        if score == max_possible_score:
+        confidence_ratio = score / max_possible_score if max_possible_score > 0 else 0
+
+        if confidence_ratio == 1.0:
             confidence = "high"
             if alternative_size:
                 message = f"✅ Рекомендуемый размер: {recommended_size} (также может подойти {alternative_size})"
             else:
                 message = f"✅ Рекомендуемый размер: {recommended_size}"
-        elif score >= max_possible_score - 1:
+        elif confidence_ratio >= 0.7:
             confidence = "medium"
             if alternative_size:
                 message = f"✅ Рекомендуемый размер: {recommended_size} (также может подойти {alternative_size})"
@@ -129,9 +156,10 @@ class SizeMatcherService:
             }
         }
 
-    def _calculate_match_score(self, user_measurements: Dict[str, int], size_row: Dict) -> Tuple[int, List[str]]:
+    def _calculate_match_score(self, user_measurements: Dict[str, any], size_row: Dict) -> Tuple[int, List[str]]:
         """
         Подсчитать количество совпадающих параметров
+        Сравниваются только те параметры, которые есть И у пользователя И в таблице размеров
 
         Returns:
             Tuple (score, matched_parameters)
@@ -139,23 +167,70 @@ class SizeMatcherService:
         score = 0
         matched_params = []
 
-        params_to_check = ['height', 'chest', 'waist', 'hips']
+        for param in self.ALL_PARAMS:
+            user_val = user_measurements.get(param)
 
-        for param in params_to_check:
+            # Если параметра нет у пользователя, пропускаем
+            if user_val is None or user_val == '':
+                continue
+
+            # Для строковых параметров (например russian_size) - точное совпадение
+            if param == 'russian_size':
+                table_val = size_row.get('russian_size')
+                if table_val and str(user_val).strip() == str(table_val).strip():
+                    score += 1
+                    matched_params.append(param)
+                continue
+
+            # Для числовых параметров - проверка диапазона
             min_val = size_row.get(f'{param}_min')
             max_val = size_row.get(f'{param}_max')
-            user_val = user_measurements.get(param)
 
             # Если параметр не задан в таблице размеров, пропускаем
             if min_val is None or max_val is None:
                 continue
 
             # Если параметр пользователя попадает в диапазон
-            if user_val and min_val <= user_val <= max_val:
-                score += 1
-                matched_params.append(param)
+            try:
+                user_val_int = int(user_val)
+                if min_val <= user_val_int <= max_val:
+                    score += 1
+                    matched_params.append(param)
+            except (ValueError, TypeError):
+                # Если не удалось преобразовать в число, пропускаем
+                continue
 
         return score, matched_params
+
+    def _get_max_possible_score(self, user_measurements: Dict[str, any], size_row: Dict) -> int:
+        """
+        Подсчитать максимально возможный score - количество параметров,
+        которые есть И у пользователя И в таблице размеров
+        """
+        max_score = 0
+
+        for param in self.ALL_PARAMS:
+            user_val = user_measurements.get(param)
+
+            # Если параметра нет у пользователя, пропускаем
+            if user_val is None or user_val == '':
+                continue
+
+            # Для строковых параметров
+            if param == 'russian_size':
+                table_val = size_row.get('russian_size')
+                if table_val:
+                    max_score += 1
+                continue
+
+            # Для числовых параметров
+            min_val = size_row.get(f'{param}_min')
+            max_val = size_row.get(f'{param}_max')
+
+            if min_val is not None and max_val is not None:
+                max_score += 1
+
+        return max_score
 
 
 # Singleton instance

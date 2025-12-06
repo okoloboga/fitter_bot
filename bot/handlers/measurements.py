@@ -7,40 +7,151 @@ from aiogram.fsm.context import FSMContext
 
 from bot.states.measurements import MeasurementStates
 from bot.keyboards.measurements import (
-    get_start_measurements_keyboard,
     get_cancel_keyboard,
-    get_measurements_actions_keyboard,
+    get_measurements_menu_keyboard,
     get_edit_measurements_keyboard
 )
 from bot.keyboards.main_menu import get_main_menu
-from bot.utils.api_client import api_client # Use API client for persistence
+from bot.utils.api_client import api_client
 
 router = Router()
 
 
-MEASUREMENTS_INFO_TEXT = """📐 Мои параметры
-
-Укажи свои параметры, чтобы мы могли рекомендовать подходящий размер для каждого товара!
-
-Нам понадобятся:
-• Рост (в сантиметрах)
-• Обхват груди (в сантиметрах)
-• Обхват талии (в сантиметрах)
-• Обхват бедер (в сантиметрах)
-
-Это займет меньше минуты! ⏱"""
+# Конфигурация параметров: название, диапазон валидации, сообщения
+PARAM_CONFIG = {
+    'russian_size': {
+        'name': 'российский размер',
+        'prompt': 'Укажи свой российский размер (например: 42-44)',
+        'type': 'string',
+        'example': '42-44',
+        'validation': None,
+        'state': MeasurementStates.editing_russian_size
+    },
+    'shoulder_length': {
+        'name': 'длину плеч',
+        'prompt': 'Укажи длину плеч в сантиметрах (например: 40)',
+        'type': 'int',
+        'example': '40',
+        'validation': (30, 60),
+        'state': MeasurementStates.editing_shoulder_length
+    },
+    'back_width': {
+        'name': 'ширину спины',
+        'prompt': 'Укажи ширину спины в сантиметрах (например: 38)',
+        'type': 'int',
+        'example': '38',
+        'validation': (30, 60),
+        'state': MeasurementStates.editing_back_width
+    },
+    'sleeve_length': {
+        'name': 'длину рукава',
+        'prompt': 'Укажи длину рукава в сантиметрах (например: 60)',
+        'type': 'int',
+        'example': '60',
+        'validation': (40, 80),
+        'state': MeasurementStates.editing_sleeve_length
+    },
+    'back_length': {
+        'name': 'длину изделия по спинке',
+        'prompt': 'Укажи длину изделия по спинке в сантиметрах (например: 70)',
+        'type': 'int',
+        'example': '70',
+        'validation': (40, 100),
+        'state': MeasurementStates.editing_back_length
+    },
+    'chest': {
+        'name': 'обхват груди',
+        'prompt': 'Укажи обхват груди в сантиметрах (например: 90)',
+        'type': 'int',
+        'example': '90',
+        'validation': (70, 150),
+        'state': MeasurementStates.editing_chest
+    },
+    'waist': {
+        'name': 'обхват талии',
+        'prompt': 'Укажи обхват талии в сантиметрах (например: 70)',
+        'type': 'int',
+        'example': '70',
+        'validation': (50, 130),
+        'state': MeasurementStates.editing_waist
+    },
+    'hips': {
+        'name': 'обхват бедер',
+        'prompt': 'Укажи обхват бедер в сантиметрах (например: 95)',
+        'type': 'int',
+        'example': '95',
+        'validation': (70, 160),
+        'state': MeasurementStates.editing_hips
+    },
+    'pants_length': {
+        'name': 'длину брюк',
+        'prompt': 'Укажи длину брюк в сантиметрах (например: 100)',
+        'type': 'int',
+        'example': '100',
+        'validation': (70, 120),
+        'state': MeasurementStates.editing_pants_length
+    },
+    'waist_girth': {
+        'name': 'обхват в поясе',
+        'prompt': 'Укажи обхват в поясе в сантиметрах (например: 75)',
+        'type': 'int',
+        'example': '75',
+        'validation': (50, 130),
+        'state': MeasurementStates.editing_waist_girth
+    },
+    'rise_height': {
+        'name': 'высоту посадки',
+        'prompt': 'Укажи высоту посадки в сантиметрах (например: 25)',
+        'type': 'int',
+        'example': '25',
+        'validation': (15, 40),
+        'state': MeasurementStates.editing_rise_height
+    },
+    'back_rise_height': {
+        'name': 'высоту посадки сзади',
+        'prompt': 'Укажи высоту посадки сзади в сантиметрах (например: 35)',
+        'type': 'int',
+        'example': '35',
+        'validation': (15, 50),
+        'state': MeasurementStates.editing_back_rise_height
+    }
+}
 
 
 def format_measurements_text(measurements: dict) -> str:
-    """Форматировать текст с параметрами"""
-    return f"""✨ Твои параметры:
+    """Форматировать текст с параметрами (только заполненные)"""
+    lines = ["✨ Твои параметры:\n"]
 
-• Рост: {measurements.get('height', 'N/A')} см
-• Обхват груди: {measurements.get('chest', 'N/A')} см
-• Обхват талии: {measurements.get('waist', 'N/A')} см
-• Обхват бедер: {measurements.get('hips', 'N/A')} см
+    param_labels = {
+        'russian_size': '📏 Российский размер',
+        'shoulder_length': '👔 Длина плеч',
+        'back_width': '👔 Ширина спины',
+        'sleeve_length': '👕 Длина рукава',
+        'back_length': '👕 Длина по спинке',
+        'chest': '👚 Обхват груди',
+        'waist': '👖 Обхват талии',
+        'hips': '🍑 Обхват бедер',
+        'pants_length': '👖 Длина брюк',
+        'waist_girth': '⚡ Обхват в поясе',
+        'rise_height': '📐 Высота посадки',
+        'back_rise_height': '📐 Высота посадки сзади'
+    }
 
-Теперь мы будем показывать рекомендуемый размер для каждого товара!"""
+    filled_count = 0
+    for key, label in param_labels.items():
+        value = measurements.get(key)
+        if value is not None and value != '':
+            filled_count += 1
+            if isinstance(value, int):
+                lines.append(f"• {label}: {value} см")
+            else:
+                lines.append(f"• {label}: {value}")
+
+    if filled_count == 0:
+        return "📐 Параметры не заполнены\n\nНажми кнопку ниже, чтобы добавить свои параметры. Можешь заполнить только те, которые знаешь!"
+
+    lines.append("\nТеперь мы будем показывать рекомендуемый размер для каждого товара!")
+    return "\n".join(lines)
 
 
 @router.callback_query(F.data == "measurements")
@@ -50,176 +161,20 @@ async def show_measurements(callback: CallbackQuery):
     measurements = await api_client.get_measurements(user_id)
 
     if not measurements:
-        await callback.message.edit_text(
-            MEASUREMENTS_INFO_TEXT,
-            reply_markup=get_start_measurements_keyboard()
-        )
-    else:
-        await callback.message.edit_text(
-            format_measurements_text(measurements),
-            reply_markup=get_measurements_actions_keyboard()
-        )
-    await callback.answer()
+        measurements = {}
 
-
-@router.callback_query(F.data == "measurements:view")
-async def view_measurements_callback(callback: CallbackQuery):
-    """Просмотр параметров через callback"""
-    user_id = callback.from_user.id
-    measurements = await api_client.get_measurements(user_id)
-
-    if measurements:
-        await callback.message.edit_text(
-            format_measurements_text(measurements),
-            reply_markup=get_measurements_actions_keyboard()
-        )
-    else:
-        await callback.message.edit_text(
-            MEASUREMENTS_INFO_TEXT,
-            reply_markup=get_start_measurements_keyboard()
-        )
-    await callback.answer()
-
-
-@router.callback_query(F.data == "measurements:start")
-async def start_measurements_input(callback: CallbackQuery, state: FSMContext):
-    """Начать ввод параметров"""
-    await state.set_state(MeasurementStates.waiting_height)
     await callback.message.edit_text(
-        "Укажи свой рост в сантиметрах (например: 165)",
-        reply_markup=get_cancel_keyboard()
+        format_measurements_text(measurements),
+        reply_markup=get_measurements_menu_keyboard()
     )
     await callback.answer()
-
-
-@router.callback_query(F.data == "measurements:cancel")
-async def cancel_measurements_input(callback: CallbackQuery, state: FSMContext):
-    """Отменить ввод параметров"""
-    await state.clear()
-    await callback.message.edit_text(
-        "Ввод параметров отменен"
-    )
-    await callback.message.answer(
-        "Выбери действие:",
-        reply_markup=get_main_menu()
-    )
-    await callback.answer()
-
-
-@router.message(MeasurementStates.waiting_height)
-async def process_height(message: Message, state: FSMContext):
-    """Обработка ввода роста"""
-    try:
-        height = int(message.text)
-        if not (140 <= height <= 200):
-            await message.answer(
-                "Пожалуйста, введи корректное значение роста от 140 до 200 см",
-                reply_markup=get_cancel_keyboard()
-            )
-            return
-        await state.update_data(height=height)
-        await state.set_state(MeasurementStates.waiting_chest)
-        await message.answer(
-            "Отлично! Теперь укажи обхват груди в сантиметрах (например: 85)",
-            reply_markup=get_cancel_keyboard()
-        )
-    except ValueError:
-        await message.answer(
-            "Пожалуйста, введи число (например: 165)",
-            reply_markup=get_cancel_keyboard()
-        )
-
-
-@router.message(MeasurementStates.waiting_chest)
-async def process_chest(message: Message, state: FSMContext):
-    """Обработка ввода обхвата груди"""
-    try:
-        chest = int(message.text)
-        if not (70 <= chest <= 130):
-            await message.answer(
-                "Пожалуйста, введи корректное значение обхвата груди от 70 до 130 см",
-                reply_markup=get_cancel_keyboard()
-            )
-            return
-        await state.update_data(chest=chest)
-        await state.set_state(MeasurementStates.waiting_waist)
-        await message.answer(
-            "Супер! Теперь обхват талии в сантиметрах (например: 65)",
-            reply_markup=get_cancel_keyboard()
-        )
-    except ValueError:
-        await message.answer(
-            "Пожалуйста, введи число (например: 85)",
-            reply_markup=get_cancel_keyboard()
-        )
-
-
-@router.message(MeasurementStates.waiting_waist)
-async def process_waist(message: Message, state: FSMContext):
-    """Обработка ввода обхвата талии"""
-    try:
-        waist = int(message.text)
-        if not (50 <= waist <= 110):
-            await message.answer(
-                "Пожалуйста, введи корректное значение обхвата талии от 50 до 110 см",
-                reply_markup=get_cancel_keyboard()
-            )
-            return
-        await state.update_data(waist=waist)
-        await state.set_state(MeasurementStates.waiting_hips)
-        await message.answer(
-            "Последний параметр! Укажи обхват бедер в сантиметрах (например: 95)",
-            reply_markup=get_cancel_keyboard()
-        )
-    except ValueError:
-        await message.answer(
-            "Пожалуйста, введи число (например: 65)",
-            reply_markup=get_cancel_keyboard()
-        )
-
-
-@router.message(MeasurementStates.waiting_hips)
-async def process_hips(message: Message, state: FSMContext):
-    """Обработка ввода обхвата бедер (финальный шаг)"""
-    try:
-        hips = int(message.text)
-        if not (70 <= hips <= 140):
-            await message.answer(
-                "Пожалуйста, введи корректное значение обхвата бедер от 70 до 140 см",
-                reply_markup=get_cancel_keyboard()
-            )
-            return
-
-        data = await state.get_data()
-        user_id = message.from_user.id
-        
-        # Save measurements via API
-        await api_client.save_measurements(
-            user_id,
-            data['height'],
-            data['chest'],
-            data['waist'],
-            hips
-        )
-
-        await state.clear()
-        measurements = await api_client.get_measurements(user_id)
-        await message.answer(
-            format_measurements_text(measurements),
-            reply_markup=get_measurements_actions_keyboard()
-        )
-    except ValueError:
-        await message.answer(
-            "Пожалуйста, введи число (например: 95)",
-            reply_markup=get_cancel_keyboard()
-        )
 
 
 @router.callback_query(F.data == "measurements:edit_menu")
 async def show_edit_menu(callback: CallbackQuery):
     """Показать меню редактирования параметров"""
     await callback.message.edit_text(
-        "Какой параметр хочешь изменить?",
+        "Выбери параметр для изменения:\n\n💡 Можешь заполнить только те параметры, которые знаешь!",
         reply_markup=get_edit_measurements_keyboard()
     )
     await callback.answer()
@@ -229,68 +184,142 @@ async def show_edit_menu(callback: CallbackQuery):
 async def start_edit_parameter(callback: CallbackQuery, state: FSMContext):
     """Начать редактирование конкретного параметра"""
     param = callback.data.split(":")[2]
-    param_names = {
-        "height": ("рост", "например: 165", MeasurementStates.editing_height),
-        "chest": ("обхват груди", "например: 85", MeasurementStates.editing_chest),
-        "waist": ("обхват талии", "например: 65", MeasurementStates.editing_waist),
-        "hips": ("обхват бедер", "например: 95", MeasurementStates.editing_hips)
-    }
 
-    if param in param_names:
-        param_name, example, state_to_set = param_names[param]
-        await state.set_state(state_to_set)
+    if param in PARAM_CONFIG:
+        config = PARAM_CONFIG[param]
+        await state.set_state(config['state'])
         await callback.message.edit_text(
-            f"Укажи {param_name} в сантиметрах ({example})",
+            config['prompt'],
             reply_markup=get_cancel_keyboard()
         )
     await callback.answer()
 
 
-async def _update_single_measurement(message: Message, state: FSMContext, param_name: str, value: int):
-    """Вспомогательная функция для обновления одного параметра"""
-    user_id = message.from_user.id
-    
-    # Get current measurements
-    current_measurements = await api_client.get_measurements(user_id)
-    if not current_measurements:
-        # This should not happen if user is editing, but as a safeguard
-        current_measurements = {"height": 0, "chest": 0, "waist": 0, "hips": 0}
-    
-    # Update the specific parameter
-    current_measurements[param_name] = value
-    
-    # Save all measurements via API
-    await api_client.save_measurements(
-        user_id,
-        current_measurements['height'],
-        current_measurements['chest'],
-        current_measurements['waist'],
-        current_measurements['hips']
-    )
-    
+@router.callback_query(F.data == "measurements:cancel")
+async def cancel_measurements_input(callback: CallbackQuery, state: FSMContext):
+    """Отменить ввод параметров"""
     await state.clear()
-    updated_measurements = await api_client.get_measurements(user_id)
+    user_id = callback.from_user.id
+    measurements = await api_client.get_measurements(user_id)
+
+    if not measurements:
+        measurements = {}
+
+    await callback.message.edit_text(
+        format_measurements_text(measurements),
+        reply_markup=get_measurements_menu_keyboard()
+    )
+    await callback.answer()
+
+
+async def _update_single_measurement(message: Message, state: FSMContext, param_name: str, value):
+    """Вспомогательная функция для обновления одного параметра через API"""
+    user_id = message.from_user.id
+
+    # Сохраняем только этот параметр через API
+    await api_client.save_measurements(user_id, **{param_name: value})
+
+    await state.clear()
+    measurements = await api_client.get_measurements(user_id)
+    if not measurements:
+        measurements = {}
+
     await message.answer(
-        format_measurements_text(updated_measurements),
-        reply_markup=get_measurements_actions_keyboard()
+        f"✅ Параметр обновлен!\n\n{format_measurements_text(measurements)}",
+        reply_markup=get_measurements_menu_keyboard()
     )
 
 
-@router.message(MeasurementStates.editing_height)
-async def edit_height(message: Message, state: FSMContext):
-    """Редактирование роста"""
+# Генерируем хендлеры для всех параметров
+@router.message(MeasurementStates.editing_russian_size)
+async def edit_russian_size(message: Message, state: FSMContext):
+    """Редактирование российского размера"""
+    value = message.text.strip()
+    if not value or len(value) > 20:
+        await message.answer(
+            "Пожалуйста, введи корректный размер (например: 42-44)",
+            reply_markup=get_cancel_keyboard()
+        )
+        return
+    await _update_single_measurement(message, state, "russian_size", value)
+
+
+@router.message(MeasurementStates.editing_shoulder_length)
+async def edit_shoulder_length(message: Message, state: FSMContext):
+    """Редактирование длины плеч"""
+    config = PARAM_CONFIG['shoulder_length']
     try:
-        height = int(message.text)
-        if not (140 <= height <= 200):
+        value = int(message.text)
+        if not (config['validation'][0] <= value <= config['validation'][1]):
             await message.answer(
-                "Пожалуйста, введи корректное значение роста от 140 до 200 см",
+                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
                 reply_markup=get_cancel_keyboard()
             )
             return
-        await _update_single_measurement(message, state, "height", height)
+        await _update_single_measurement(message, state, "shoulder_length", value)
     except ValueError:
         await message.answer(
-            "Пожалуйста, введи число (например: 165)",
+            f"Пожалуйста, введи число (например: {config['example']})",
+            reply_markup=get_cancel_keyboard()
+        )
+
+
+@router.message(MeasurementStates.editing_back_width)
+async def edit_back_width(message: Message, state: FSMContext):
+    """Редактирование ширины спины"""
+    config = PARAM_CONFIG['back_width']
+    try:
+        value = int(message.text)
+        if not (config['validation'][0] <= value <= config['validation'][1]):
+            await message.answer(
+                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                reply_markup=get_cancel_keyboard()
+            )
+            return
+        await _update_single_measurement(message, state, "back_width", value)
+    except ValueError:
+        await message.answer(
+            f"Пожалуйста, введи число (например: {config['example']})",
+            reply_markup=get_cancel_keyboard()
+        )
+
+
+@router.message(MeasurementStates.editing_sleeve_length)
+async def edit_sleeve_length(message: Message, state: FSMContext):
+    """Редактирование длины рукава"""
+    config = PARAM_CONFIG['sleeve_length']
+    try:
+        value = int(message.text)
+        if not (config['validation'][0] <= value <= config['validation'][1]):
+            await message.answer(
+                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                reply_markup=get_cancel_keyboard()
+            )
+            return
+        await _update_single_measurement(message, state, "sleeve_length", value)
+    except ValueError:
+        await message.answer(
+            f"Пожалуйста, введи число (например: {config['example']})",
+            reply_markup=get_cancel_keyboard()
+        )
+
+
+@router.message(MeasurementStates.editing_back_length)
+async def edit_back_length(message: Message, state: FSMContext):
+    """Редактирование длины изделия по спинке"""
+    config = PARAM_CONFIG['back_length']
+    try:
+        value = int(message.text)
+        if not (config['validation'][0] <= value <= config['validation'][1]):
+            await message.answer(
+                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                reply_markup=get_cancel_keyboard()
+            )
+            return
+        await _update_single_measurement(message, state, "back_length", value)
+    except ValueError:
+        await message.answer(
+            f"Пожалуйста, введи число (например: {config['example']})",
             reply_markup=get_cancel_keyboard()
         )
 
@@ -298,18 +327,19 @@ async def edit_height(message: Message, state: FSMContext):
 @router.message(MeasurementStates.editing_chest)
 async def edit_chest(message: Message, state: FSMContext):
     """Редактирование обхвата груди"""
+    config = PARAM_CONFIG['chest']
     try:
-        chest = int(message.text)
-        if not (70 <= chest <= 130):
+        value = int(message.text)
+        if not (config['validation'][0] <= value <= config['validation'][1]):
             await message.answer(
-                "Пожалуйста, введи корректное значение обхвата груди от 70 до 130 см",
+                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
                 reply_markup=get_cancel_keyboard()
             )
             return
-        await _update_single_measurement(message, state, "chest", chest)
+        await _update_single_measurement(message, state, "chest", value)
     except ValueError:
         await message.answer(
-            "Пожалуйста, введи число (например: 85)",
+            f"Пожалуйста, введи число (например: {config['example']})",
             reply_markup=get_cancel_keyboard()
         )
 
@@ -317,18 +347,19 @@ async def edit_chest(message: Message, state: FSMContext):
 @router.message(MeasurementStates.editing_waist)
 async def edit_waist(message: Message, state: FSMContext):
     """Редактирование обхвата талии"""
+    config = PARAM_CONFIG['waist']
     try:
-        waist = int(message.text)
-        if not (50 <= waist <= 110):
+        value = int(message.text)
+        if not (config['validation'][0] <= value <= config['validation'][1]):
             await message.answer(
-                "Пожалуйста, введи корректное значение обхвата талии от 50 до 110 см",
+                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
                 reply_markup=get_cancel_keyboard()
             )
             return
-        await _update_single_measurement(message, state, "waist", waist)
+        await _update_single_measurement(message, state, "waist", value)
     except ValueError:
         await message.answer(
-            "Пожалуйста, введи число (например: 65)",
+            f"Пожалуйста, введи число (например: {config['example']})",
             reply_markup=get_cancel_keyboard()
         )
 
@@ -336,17 +367,98 @@ async def edit_waist(message: Message, state: FSMContext):
 @router.message(MeasurementStates.editing_hips)
 async def edit_hips(message: Message, state: FSMContext):
     """Редактирование обхвата бедер"""
+    config = PARAM_CONFIG['hips']
     try:
-        hips = int(message.text)
-        if not (70 <= hips <= 140):
+        value = int(message.text)
+        if not (config['validation'][0] <= value <= config['validation'][1]):
             await message.answer(
-                "Пожалуйста, введи корректное значение обхвата бедер от 70 до 140 см",
+                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
                 reply_markup=get_cancel_keyboard()
             )
             return
-        await _update_single_measurement(message, state, "hips", hips)
+        await _update_single_measurement(message, state, "hips", value)
     except ValueError:
         await message.answer(
-            "Пожалуйста, введи число (например: 95)",
+            f"Пожалуйста, введи число (например: {config['example']})",
+            reply_markup=get_cancel_keyboard()
+        )
+
+
+@router.message(MeasurementStates.editing_pants_length)
+async def edit_pants_length(message: Message, state: FSMContext):
+    """Редактирование длины брюк"""
+    config = PARAM_CONFIG['pants_length']
+    try:
+        value = int(message.text)
+        if not (config['validation'][0] <= value <= config['validation'][1]):
+            await message.answer(
+                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                reply_markup=get_cancel_keyboard()
+            )
+            return
+        await _update_single_measurement(message, state, "pants_length", value)
+    except ValueError:
+        await message.answer(
+            f"Пожалуйста, введи число (например: {config['example']})",
+            reply_markup=get_cancel_keyboard()
+        )
+
+
+@router.message(MeasurementStates.editing_waist_girth)
+async def edit_waist_girth(message: Message, state: FSMContext):
+    """Редактирование обхвата в поясе"""
+    config = PARAM_CONFIG['waist_girth']
+    try:
+        value = int(message.text)
+        if not (config['validation'][0] <= value <= config['validation'][1]):
+            await message.answer(
+                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                reply_markup=get_cancel_keyboard()
+            )
+            return
+        await _update_single_measurement(message, state, "waist_girth", value)
+    except ValueError:
+        await message.answer(
+            f"Пожалуйста, введи число (например: {config['example']})",
+            reply_markup=get_cancel_keyboard()
+        )
+
+
+@router.message(MeasurementStates.editing_rise_height)
+async def edit_rise_height(message: Message, state: FSMContext):
+    """Редактирование высоты посадки"""
+    config = PARAM_CONFIG['rise_height']
+    try:
+        value = int(message.text)
+        if not (config['validation'][0] <= value <= config['validation'][1]):
+            await message.answer(
+                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                reply_markup=get_cancel_keyboard()
+            )
+            return
+        await _update_single_measurement(message, state, "rise_height", value)
+    except ValueError:
+        await message.answer(
+            f"Пожалуйста, введи число (например: {config['example']})",
+            reply_markup=get_cancel_keyboard()
+        )
+
+
+@router.message(MeasurementStates.editing_back_rise_height)
+async def edit_back_rise_height(message: Message, state: FSMContext):
+    """Редактирование высоты посадки сзади"""
+    config = PARAM_CONFIG['back_rise_height']
+    try:
+        value = int(message.text)
+        if not (config['validation'][0] <= value <= config['validation'][1]):
+            await message.answer(
+                f"Пожалуйста, введи корректное значение от {config['validation'][0]} до {config['validation'][1]} см",
+                reply_markup=get_cancel_keyboard()
+            )
+            return
+        await _update_single_measurement(message, state, "back_rise_height", value)
+    except ValueError:
+        await message.answer(
+            f"Пожалуйста, введи число (например: {config['example']})",
             reply_markup=get_cancel_keyboard()
         )

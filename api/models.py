@@ -31,10 +31,21 @@ class UserMeasurement(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.tg_id", ondelete="CASCADE"), unique=True, nullable=False)
-    height = Column(Integer, nullable=False)  # Рост в см
-    chest = Column(Integer, nullable=False)   # Обхват груди в см
-    waist = Column(Integer, nullable=False)   # Обхват талии в см
-    hips = Column(Integer, nullable=False)    # Обхват бедер в см
+
+    # Все параметры опциональны - пользователь может заполнять выборочно
+    russian_size = Column(String(20), nullable=True)  # Российский размер (например "42-44")
+    shoulder_length = Column(Integer, nullable=True)  # Длина плеч в см
+    back_width = Column(Integer, nullable=True)       # Ширина спины в см
+    sleeve_length = Column(Integer, nullable=True)    # Длина рукава в см
+    back_length = Column(Integer, nullable=True)      # Длина изделия по спинке в см
+    chest = Column(Integer, nullable=True)            # Обхват груди в см
+    waist = Column(Integer, nullable=True)            # Обхват талии в см
+    hips = Column(Integer, nullable=True)             # Обхват бедер в см
+    pants_length = Column(Integer, nullable=True)     # Длина брюк в см
+    waist_girth = Column(Integer, nullable=True)      # Обхват в поясе в см
+    rise_height = Column(Integer, nullable=True)      # Высота посадки в см
+    back_rise_height = Column(Integer, nullable=True) # Высота посадки сзади в см
+
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
