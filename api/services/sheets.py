@@ -243,13 +243,14 @@ class GoogleSheetsService:
                 
                 if str(mapped_row['category']) == category_id and is_active:
                     product_id = str(mapped_row['product_id'])
+                    ozon_id = mapped_row.get('ozon_url')
                     products.append({
                         'product_id': product_id,
                         'category': str(mapped_row['category']),
                         'name': mapped_row['name'],
                         'description': mapped_row['description'],
                         'wb_link': f"https://www.wildberries.ru/catalog/{product_id}/detail.aspx",
-                        'ozon_url': convert_google_drive_url(mapped_row.get('ozon_url')),
+                        'ozon_url': f"https://www.ozon.ru/product/pidzhak-slavalook-brand-{ozon_id}" if ozon_id else None,
                         'available_sizes': mapped_row['available_sizes'],
                         'collage_url': convert_google_drive_url(mapped_row['collage_url']),
                         'photo_1_url': convert_google_drive_url(mapped_row['photo_1_url']),
@@ -288,6 +289,7 @@ class GoogleSheetsService:
                 if str(mapped_row['product_id']) == product_id:
                     is_active = str(mapped_row.get('is_active', 'ДА')).upper() in ['ДА', 'TRUE', 'YES', '1']
                     prod_id = str(mapped_row['product_id'])
+                    ozon_id = mapped_row.get('ozon_url')
 
                     product = {
                         'product_id': prod_id,
@@ -295,7 +297,7 @@ class GoogleSheetsService:
                         'name': mapped_row['name'],
                         'description': mapped_row['description'],
                         'wb_link': f"https://www.wildberries.ru/catalog/{prod_id}/detail.aspx",
-                        'ozon_url': convert_google_drive_url(mapped_row.get('ozon_url')),
+                        'ozon_url': f"https://www.ozon.ru/product/pidzhak-slavalook-brand-{ozon_id}" if ozon_id else None,
                         'available_sizes': mapped_row['available_sizes'],
                         'collage_url': convert_google_drive_url(mapped_row['collage_url']),
                         'photo_1_url': convert_google_drive_url(mapped_row['photo_1_url']),
