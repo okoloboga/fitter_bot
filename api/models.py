@@ -23,6 +23,8 @@ class User(Base):
     # Relationships
     measurements = relationship("UserMeasurement", back_populates="user", uselist=False, cascade="all, delete-orphan")
     favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
+    photos = relationship("UserPhoto", back_populates="user", cascade="all, delete-orphan")
+    try_on_history = relationship("TryOnHistory", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserMeasurement(Base):
@@ -68,3 +70,38 @@ class Favorite(Base):
     __table_args__ = (
         UniqueConstraint('user_id', 'product_id', name='unique_user_product'),
     )
+
+
+class UserPhoto(Base):
+    """Модель фотографий пользователей для примерки"""
+    __tablename__ = "user_photos"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.tg_id", ondelete="CASCADE"), nullable=False, index=True)
+    file_id = Column(String(255), nullable=False)  # Telegram file_id
+    file_path = Column(String(500), nullable=False)  # Путь к файлу на сервере
+    uploaded_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    is_active = Column(Boolean, default=True, nullable=False)  # Активно ли фото
+    consent_given = Column(Boolean, default=False, nullable=False)  # Согласие на обработку
+
+    # Relationships
+    user = relationship("User", back_populates="photos")
+    try_on_history = relationship("TryOnHistory", back_populates="user_photo", cascade="all, delete-orphan")
+
+
+class TryOnHistory(Base):
+    """Модель истории примерок"""
+    __tablename__ = "try_on_history"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.tg_id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(String(100), nullable=False, index=True)  # ID товара из Google Sheets
+    user_photo_id = Column(Integer, ForeignKey("user_photos.id", ondelete="CASCADE"), nullable=False)
+    result_file_path = Column(String(500), nullable=True)  # Путь к результату примерки
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    generation_time = Column(Integer, nullable=True)  # Время генерации в секундах
+    status = Column(String(20), nullable=False, default="processing")  # processing, success, failed
+
+    # Relationships
+    user = relationship("User", back_populates="try_on_history")
+    user_photo = relationship("UserPhoto", back_populates="try_on_history")

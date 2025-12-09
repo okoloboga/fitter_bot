@@ -219,14 +219,22 @@ class GoogleSheetsService:
 
         except Exception as e:
             logger.error(f"Error fetching categories from Google Sheets: {e}", exc_info=True)
+            # Возвращаем кешированные данные, если они есть
+            if 'categories' in categories_cache:
+                logger.warning("Using cached categories due to Google Sheets error")
+                return categories_cache['categories']
+            logger.error("No cached data available, returning empty list")
             return []
 
     def get_products_by_category(self, category_id: str) -> List[Dict]:
         """Получить товары по категории"""
+        logger.info(f"Requesting products for category_id: {category_id}")
         cache_key = f"products_{category_id}"
         if cache_key in products_cache:
+            logger.info(f"Cache HIT for category: {category_id}")
             return products_cache[cache_key]
 
+        logger.info(f"Cache MISS for category: {category_id}. Fetching from Google Sheets.")
         if not self.spreadsheet:
             logger.error("Google Sheets not initialized. Cannot fetch products.")
             return []
@@ -241,8 +249,8 @@ class GoogleSheetsService:
                 
                 is_active = str(mapped_row.get('is_active', 'ДА')).upper() in ['ДА', 'TRUE', 'YES', '1']
                 
-                if str(mapped_row['category']) == category_id and is_active:
-                    product_id = str(mapped_row['product_id'])
+                if str(mapped_row.get('category', '')).strip() == category_id and is_active:
+                    product_id = str(mapped_row['product_id']).strip()
                     ozon_id = mapped_row.get('ozon_url')
                     products.append({
                         'product_id': product_id,
@@ -261,19 +269,40 @@ class GoogleSheetsService:
                         'photo_6_url': convert_google_drive_url(mapped_row['photo_6_url']),
                         'is_active': is_active
                     })
+            
+            logger.info(f"Found and filtered {len(products)} products for category {category_id}.")
 
             products_cache[cache_key] = products
+            
+            # Дополнительно кешируем каждый товар по отдельности для консистентности
+            logger.info(f"Populating single-product cache for {len(products)} items from category {category_id}.")
+            for product in products:
+                single_product_cache_key = f"product_{product['product_id']}"
+                logger.debug(f"Caching single product with key: {single_product_cache_key}")
+                if single_product_cache_key not in products_cache:
+                    products_cache[single_product_cache_key] = product
+            
             return products
 
         except Exception as e:
             logger.error(f"Error fetching products from Google Sheets: {e}", exc_info=True)
+            # Возвращаем кешированные данные, если они есть
+            if cache_key in products_cache:
+                logger.warning(f"Using cached products for category {category_id} due to Google Sheets error")
+                return products_cache[cache_key]
+            logger.error(f"No cached data available for category {category_id}, returning empty list")
             return []
 
     def get_product_by_id(self, product_id: str) -> Optional[Dict]:
         """Получить товар по ID"""
+        logger.info(f"Requesting product by ID: {product_id}")
         cache_key = f"product_{product_id}"
+        
         if cache_key in products_cache:
+            logger.info(f"Cache HIT for product_id: {product_id}")
             return products_cache[cache_key]
+        
+        logger.info(f"Cache MISS for product_id: {product_id}. Fetching from Google Sheets.")
 
         if not self.spreadsheet:
             logger.error("Google Sheets not initialized. Cannot fetch product.")
@@ -282,18 +311,23 @@ class GoogleSheetsService:
         try:
             worksheet = self.spreadsheet.worksheet("Товары")
             records = worksheet.get_all_records()
+            logger.info(f"Fetched {len(records)} total rows from 'Товары' sheet.")
 
             for row in records:
                 mapped_row = self._map_row(row, self.PRODUCTS_MAPPING)
+                sheet_product_id = str(mapped_row.get('product_id', '')).strip()
                 
-                if str(mapped_row['product_id']) == product_id:
+                logger.debug(f"Checking sheet row with ID: '{sheet_product_id}' against requested ID: '{product_id}'")
+
+                if sheet_product_id == product_id:
+                    logger.info(f"Found match for product_id: {product_id} in sheet.")
                     is_active = str(mapped_row.get('is_active', 'ДА')).upper() in ['ДА', 'TRUE', 'YES', '1']
-                    prod_id = str(mapped_row['product_id'])
+                    prod_id = sheet_product_id
                     ozon_id = mapped_row.get('ozon_url')
 
                     product = {
                         'product_id': prod_id,
-                        'category': str(mapped_row['category']),
+                        'category': str(mapped_row.get('category', '')).strip(),
                         'name': mapped_row['name'],
                         'description': mapped_row['description'],
                         'wb_link': f"https://www.wildberries.ru/catalog/{prod_id}/detail.aspx",
@@ -310,11 +344,17 @@ class GoogleSheetsService:
                     }
                     products_cache[cache_key] = product
                     return product
-
+            
+            logger.warning(f"Product with ID: {product_id} not found after scanning all sheet rows.")
             return None
 
         except Exception as e:
             logger.error(f"Error fetching product from Google Sheets: {e}", exc_info=True)
+            # Возвращаем кешированные данные, если они есть
+            if cache_key in products_cache:
+                logger.warning(f"Using cached product {product_id} due to Google Sheets error")
+                return products_cache[cache_key]
+            logger.error(f"No cached data available for product {product_id}")
             return None
 
     def get_size_table(self, table_id: str) -> List[Dict]:
@@ -382,7 +422,12 @@ class GoogleSheetsService:
             return size_table
 
         except Exception as e:
-            logger.error(f"Error fetching size table from Google Sheets: {e}")
+            logger.error(f"Error fetching size table from Google Sheets: {e}", exc_info=True)
+            # Возвращаем кешированные данные, если они есть
+            if cache_key in size_tables_cache:
+                logger.warning(f"Using cached size table {table_id} due to Google Sheets error")
+                return size_tables_cache[cache_key]
+            logger.error(f"No cached data available for size table {table_id}, returning empty list")
             return []
 
     def clear_cache(self):

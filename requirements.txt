@@ -30,3 +30,7 @@ cachetools==5.5.0
 
 # Image Processing
 Pillow
+
+# AI Integration
+openai==1.55.3
+tenacity==9.0.0

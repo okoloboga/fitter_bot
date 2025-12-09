@@ -5,30 +5,12 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+import logging
 
-from bot.utils.storage import user_measurements, user_favorites
+from bot.utils.api_client import api_request
 
 router = Router()
-
-
-ADMIN_STATS_TEXT = """📊 Статистика бота
-
-👥 Пользователи:
-Всего: 127
-Новых за сегодня: 5
-Новых за 7 дней: 23
-Активных за 7 дней: 89
-
-📐 Параметры:
-Указали параметры: {measurements_count}
-
-⭐️ Избранное:
-Всего добавлений: {favorites_count}
-
-🔥 ТОП-3 категорий:
-1. Куртки оверсайз - 45 просмотров
-2. Пальто - 32 просмотра
-3. Штаны - 28 просмотров"""
+logger = logging.getLogger(__name__)
 
 
 def get_admin_stats_keyboard():
@@ -39,43 +21,91 @@ def get_admin_stats_keyboard():
     ])
 
 
+async def format_stats_text(stats: dict) -> str:
+    """Форматирование статистики"""
+    users = stats.get("users", {})
+    measurements = stats.get("measurements", {})
+    favorites = stats.get("favorites", {})
+    tryons = stats.get("tryons", {})
+
+    text = f"""📊 Статистика бота
+
+👥 Пользователи:
+Всего: {users.get('total', 0)}
+Новых за сегодня: {users.get('today', 0)}
+Новых за 7 дней: {users.get('week', 0)}
+Активных за 7 дней: {users.get('active_week', 0)}
+
+📐 Параметры:
+Указали параметры: {measurements.get('count', 0)} ({measurements.get('percent', 0)}%)
+
+⭐️ Избранное:
+Всего добавлений: {favorites.get('total', 0)}"""
+
+    # Если есть статистика примерок
+    if tryons:
+        text += f"""
+
+👗 Примерки:
+Всего: {tryons.get('total', 0)}
+За сегодня: {tryons.get('today', 0)}
+За 7 дней: {tryons.get('week', 0)}
+Загрузили фото: {tryons.get('users_with_photos', 0)}
+Среднее время: {tryons.get('avg_generation_time', 0)} сек
+Успешных: {tryons.get('success_rate', 0)}%"""
+
+        # ТОП примерок
+        top_tryons = tryons.get('top', [])
+        if top_tryons:
+            text += "\n\n🔥 ТОП товаров для примерки:"
+            for i, item in enumerate(top_tryons[:5], 1):
+                text += f"\n{i}. {item['product_id']} - {item['count']} примерок"
+
+    return text
+
+
 @router.message(Command("admin_stats"))
 async def show_admin_stats(message: Message):
-    """Показать статистику (для этапа 0 доступна всем)"""
+    """Показать статистику"""
+    try:
+        # Получаем статистику из API
+        result = await api_request("GET", "/admin/stats")
 
-    # Считаем реальную статистику из хранилища в памяти
-    measurements_count = len(user_measurements)
+        if not result.get("success", True):
+            await message.answer("❌ Не удалось получить статистику")
+            return
 
-    # Считаем общее количество избранных товаров
-    favorites_count = sum(len(favs) for favs in user_favorites.values())
+        stats_text = await format_stats_text(result)
 
-    stats_text = ADMIN_STATS_TEXT.format(
-        measurements_count=measurements_count,
-        favorites_count=favorites_count
-    )
+        await message.answer(
+            stats_text,
+            reply_markup=get_admin_stats_keyboard()
+        )
 
-    await message.answer(
-        stats_text,
-        reply_markup=get_admin_stats_keyboard()
-    )
+    except Exception as e:
+        logger.error(f"Failed to get admin stats: {e}")
+        await message.answer("❌ Ошибка получения статистики")
 
 
 @router.callback_query(F.data == "admin:refresh")
 async def refresh_admin_stats(callback: CallbackQuery):
     """Обновить статистику"""
+    try:
+        # Получаем статистику из API
+        result = await api_request("GET", "/admin/stats")
 
-    # Считаем актуальную статистику
-    measurements_count = len(user_measurements)
-    favorites_count = sum(len(favs) for favs in user_favorites.values())
+        if not result.get("success", True):
+            await callback.answer("❌ Не удалось обновить статистику", show_alert=True)
+            return
 
-    stats_text = ADMIN_STATS_TEXT.format(
-        measurements_count=measurements_count,
-        favorites_count=favorites_count
-    )
+        stats_text = await format_stats_text(result)
 
-    await callback.message.edit_text(
-        stats_text,
-        reply_markup=get_admin_stats_keyboard()
-    )
+        await callback.message.edit_text(
+            stats_text,
+            reply_markup=get_admin_stats_keyboard()
+        )
+        await callback.answer("✅ Статистика обновлена")
 
-    await callback.answer("Статистика обновлена")
+    except Exception as e:
+        logger.error(f"Failed to refresh admin stats: {e}")
+        await callback.answer("❌ Ошибка обновления", show_alert=True)

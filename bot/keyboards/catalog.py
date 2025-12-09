@@ -85,8 +85,8 @@ def get_product_keyboard(product: Dict, category_id: str, current_index: int,
     # 3-й ряд: Примерка
     buttons.append([
         InlineKeyboardButton(
-            text="👗 Примерить (скоро!)",
-            callback_data=f"tryon:{product_id}"
+            text="👗 Примерить",
+            callback_data=f"tryon:start:{product_id}"
         )
     ])
 
@@ -179,8 +179,8 @@ def get_favorites_product_keyboard(product: Dict, current_index: int, total_coun
     # 3-й ряд: Примерка
     buttons.append([
         InlineKeyboardButton(
-            text="👗 Примерить (скоро!)",
-            callback_data=f"tryon:{product_id}"
+            text="👗 Примерить",
+            callback_data=f"tryon:start:{product_id}"
         )
     ])
 

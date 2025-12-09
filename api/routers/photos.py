@@ -1,0 +1,366 @@
+"""
+API endpoints для работы с фото пользователей и примерками
+"""
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, delete, and_
+from typing import List, Optional
+from datetime import datetime, date
+import os
+import logging
+
+from api.database import get_db
+from api.models import User, UserPhoto, TryOnHistory
+from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(tags=["photos"])
+
+
+# Pydantic schemas
+class PhotoUploadRequest(BaseModel):
+    tg_id: int
+    file_id: str
+    file_path: str
+    consent_given: bool
+
+
+class PhotoResponse(BaseModel):
+    id: int
+    file_id: str
+    file_path: str
+    uploaded_at: datetime
+    is_active: bool
+
+
+class TryOnCreateRequest(BaseModel):
+    tg_id: int
+    product_id: str
+    user_photo_id: int
+
+
+class TryOnResponse(BaseModel):
+    id: int
+    product_id: str
+    user_photo_id: int
+    result_file_path: Optional[str]
+    created_at: datetime
+    generation_time: Optional[int]
+    status: str
+
+
+class TryOnStatsResponse(BaseModel):
+    total: int
+    today: int
+    week: int
+    month: int
+    avg_generation_time: Optional[float]
+    success_rate: float
+
+
+# === Photo Management ===
+
+@router.post("/photos/upload")
+async def upload_photo(req: PhotoUploadRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Сохранение фото пользователя в БД
+    """
+    try:
+        # Проверяем пользователя
+        result = await db.execute(select(User).where(User.tg_id == req.tg_id))
+        user = result.scalar_one_or_none()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Проверяем лимит фото (максимум 3)
+        result = await db.execute(
+            select(func.count(UserPhoto.id)).where(UserPhoto.user_id == req.tg_id)
+        )
+        photo_count = result.scalar() or 0
+
+        if photo_count >= 3:
+            # Удаляем самое старое фото
+            result = await db.execute(
+                select(UserPhoto)
+                .where(UserPhoto.user_id == req.tg_id)
+                .order_by(UserPhoto.uploaded_at.asc())
+                .limit(1)
+            )
+            oldest_photo = result.scalar_one_or_none()
+
+            if oldest_photo:
+                # Удаляем файл
+                if os.path.exists(oldest_photo.file_path):
+                    os.remove(oldest_photo.file_path)
+                await db.delete(oldest_photo)
+                await db.commit()
+
+        # Создаем новое фото
+        new_photo = UserPhoto(
+            user_id=req.tg_id,
+            file_id=req.file_id,
+            file_path=req.file_path,
+            consent_given=req.consent_given,
+            is_active=True
+        )
+
+        db.add(new_photo)
+        await db.commit()
+        await db.refresh(new_photo)
+
+        return {
+            "success": True,
+            "photo": {
+                "id": new_photo.id,
+                "file_id": new_photo.file_id,
+                "file_path": new_photo.file_path,
+                "uploaded_at": new_photo.uploaded_at.isoformat()
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to upload photo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/photos/{tg_id}")
+async def get_user_photos(tg_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Получение всех фото пользователя
+    """
+    try:
+        result = await db.execute(
+            select(UserPhoto)
+            .where(UserPhoto.user_id == tg_id)
+            .order_by(UserPhoto.uploaded_at.desc())
+        )
+        photos = result.scalars().all()
+
+        return {
+            "success": True,
+            "photos": [
+                {
+                    "id": photo.id,
+                    "file_id": photo.file_id,
+                    "file_path": photo.file_path,
+                    "uploaded_at": photo.uploaded_at.isoformat(),
+                    "is_active": photo.is_active
+                }
+                for photo in photos
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get user photos: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/photos/{photo_id}")
+async def delete_photo(photo_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Удаление фото пользователя
+    """
+    try:
+        result = await db.execute(select(UserPhoto).where(UserPhoto.id == photo_id))
+        photo = result.scalar_one_or_none()
+
+        if not photo:
+            raise HTTPException(status_code=404, detail="Photo not found")
+
+        # Удаляем файл
+        if os.path.exists(photo.file_path):
+            os.remove(photo.file_path)
+
+        await db.delete(photo)
+        await db.commit()
+
+        return {"success": True, "message": "Photo deleted"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete photo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# === Try-On Management ===
+
+@router.post("/tryon/create")
+async def create_tryon(req: TryOnCreateRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Создание записи о примерке (статус processing)
+    """
+    try:
+        # Проверяем rate limit (10 примерок в день)
+        today = date.today()
+        result = await db.execute(
+            select(func.count(TryOnHistory.id))
+            .where(
+                and_(
+                    TryOnHistory.user_id == req.tg_id,
+                    func.date(TryOnHistory.created_at) == today
+                )
+            )
+        )
+        today_count = result.scalar() or 0
+
+        if today_count >= 10:
+            return {
+                "success": False,
+                "error": "rate_limit",
+                "message": "Ты достиг лимита примерок на сегодня (10/10). Попробуй завтра! 😊"
+            }
+
+        # Создаем запись
+        tryon = TryOnHistory(
+            user_id=req.tg_id,
+            product_id=req.product_id,
+            user_photo_id=req.user_photo_id,
+            status="processing"
+        )
+
+        db.add(tryon)
+        await db.commit()
+        await db.refresh(tryon)
+
+        return {
+            "success": True,
+            "tryon_id": tryon.id
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to create try-on: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/tryon/{tryon_id}")
+async def update_tryon(
+    tryon_id: int,
+    result_file_path: Optional[str] = None,
+    generation_time: Optional[int] = None,
+    status: str = "success",
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Обновление записи о примерке после генерации
+    """
+    try:
+        result = await db.execute(select(TryOnHistory).where(TryOnHistory.id == tryon_id))
+        tryon = result.scalar_one_or_none()
+
+        if not tryon:
+            raise HTTPException(status_code=404, detail="Try-on not found")
+
+        tryon.result_file_path = result_file_path
+        tryon.generation_time = generation_time
+        tryon.status = status
+
+        await db.commit()
+
+        return {"success": True}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update try-on: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tryon/history/{tg_id}")
+async def get_tryon_history(tg_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Получение истории примерок пользователя
+    """
+    try:
+        result = await db.execute(
+            select(TryOnHistory)
+            .where(
+                and_(
+                    TryOnHistory.user_id == tg_id,
+                    TryOnHistory.status == "success"
+                )
+            )
+            .order_by(TryOnHistory.created_at.desc())
+        )
+        history = result.scalars().all()
+
+        return {
+            "success": True,
+            "history": [
+                {
+                    "id": item.id,
+                    "product_id": item.product_id,
+                    "result_file_path": item.result_file_path,
+                    "created_at": item.created_at.isoformat(),
+                    "generation_time": item.generation_time
+                }
+                for item in history
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get try-on history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/tryon/{tryon_id}")
+async def delete_tryon(tryon_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Удаление примерки из истории
+    """
+    try:
+        result = await db.execute(select(TryOnHistory).where(TryOnHistory.id == tryon_id))
+        tryon = result.scalar_one_or_none()
+
+        if not tryon:
+            raise HTTPException(status_code=404, detail="Try-on not found")
+
+        # Удаляем файл результата
+        if tryon.result_file_path and os.path.exists(tryon.result_file_path):
+            os.remove(tryon.result_file_path)
+
+        await db.delete(tryon)
+        await db.commit()
+
+        return {"success": True, "message": "Try-on deleted"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete try-on: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tryon/check-limit/{tg_id}")
+async def check_tryon_limit(tg_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Проверка лимита примерок на сегодня
+    """
+    try:
+        today = date.today()
+        result = await db.execute(
+            select(func.count(TryOnHistory.id))
+            .where(
+                and_(
+                    TryOnHistory.user_id == tg_id,
+                    func.date(TryOnHistory.created_at) == today
+                )
+            )
+        )
+        today_count = result.scalar() or 0
+
+        return {
+            "success": True,
+            "count": today_count,
+            "limit": 10,
+            "remaining": max(0, 10 - today_count),
+            "limit_reached": today_count >= 10
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to check try-on limit: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

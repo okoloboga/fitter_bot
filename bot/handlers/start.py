@@ -55,11 +55,14 @@ async def cmd_start(message: Message, state: FSMContext):
         username=message.from_user.username,
         first_name=message.from_user.first_name
     )
-    
+
+    # Проверяем наличие истории примерок
+    has_history = await api_client.has_tryon_history(message.from_user.id)
+
     await state.clear()
     await message.answer(
         WELCOME_TEXT,
-        reply_markup=get_main_menu()
+        reply_markup=get_main_menu(has_tryon_history=has_history)
     )
 
 
@@ -100,52 +103,23 @@ async def show_about(callback: CallbackQuery):
 
 
 @router.callback_query(F.data == "main_menu")
-
-
 async def back_to_main_menu(callback: CallbackQuery, state: FSMContext):
-
-
     """Возврат в главное меню"""
-
-
     await state.clear()
 
-
-
-
+    # Проверяем наличие истории примерок
+    has_history = await api_client.has_tryon_history(callback.from_user.id)
 
     # Удаляем предыдущее сообщение и отправляем новое
-
-
     try:
-
-
         await callback.message.delete()
-
-
     except:
-
-
         pass
 
-
-    
-
-
     await callback.message.answer(
-
-
         WELCOME_BACK_TEXT,
-
-
-        reply_markup=get_main_menu()
-
-
+        reply_markup=get_main_menu(has_tryon_history=has_history)
     )
-
-
-
-
 
     await callback.answer()
 
@@ -159,7 +133,29 @@ async def noop_callback(callback: CallbackQuery):
 @router.message()
 async def unknown_message(message: Message):
     """Обработчик неизвестных сообщений"""
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Логируем что пришло
+    logger.info(f"Unknown message received: content_type={message.content_type}, "
+                f"has_photo={message.photo is not None}, "
+                f"text={message.text if message.text else 'None'}")
+
+    # Если это фото - даем подсказку
+    if message.photo:
+        await message.answer(
+            "Чтобы примерить одежду:\n"
+            "1. Перейди в каталог 🛍\n"
+            "2. Выбери товар\n"
+            "3. Нажми кнопку '👗 Примерить'\n"
+            "4. Загрузи свое фото"
+        )
+        return
+
+    # Проверяем наличие истории примерок
+    has_history = await api_client.has_tryon_history(message.from_user.id)
+
     await message.answer(
         "Я не понял эту команду 😅\n\nВоспользуйся меню ниже или введи /start для перезапуска бота",
-        reply_markup=get_main_menu()
+        reply_markup=get_main_menu(has_tryon_history=has_history)
     )

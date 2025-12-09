@@ -154,7 +154,7 @@ def format_measurements_text(measurements: dict) -> str:
     return "\n".join(lines)
 
 
-@router.callback_query(F.data == "measurements")
+@router.callback_query(F.data.in_(["measurements", "measurements_menu"]))
 async def show_measurements(callback: CallbackQuery):
     """Показать раздел параметров"""
     user_id = callback.from_user.id

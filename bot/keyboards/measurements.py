@@ -22,6 +22,10 @@ def get_measurements_menu_keyboard():
             callback_data="measurements:edit_menu"
         )],
         [InlineKeyboardButton(
+            text="📸 Мои фото",
+            callback_data="my_photos"
+        )],
+        [InlineKeyboardButton(
             text="◀️ В главное меню",
             callback_data="main_menu"
         )]

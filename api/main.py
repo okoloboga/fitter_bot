@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 import logging
 
 from api.database import init_db
-from api.routers import users, measurements, favorites, catalog, size_recommend, admin
+from api.routers import users, measurements, favorites, catalog, size_recommend, admin, photos
 
 # Настройка логирования
 logging.basicConfig(
@@ -63,6 +63,7 @@ app.include_router(measurements.router, prefix="/api")
 app.include_router(favorites.router, prefix="/api")
 app.include_router(catalog.router, prefix="/api")
 app.include_router(size_recommend.router, prefix="/api")
+app.include_router(photos.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 
 
