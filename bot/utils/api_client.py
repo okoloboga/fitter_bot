@@ -88,13 +88,13 @@ class APIClient:
             return None
 
     # Favorites endpoints
-    async def add_to_favorites(self, user_tg_id: int, product_id: str) -> Optional[Dict]:
+    async def add_to_favorites(self, user_id: int, product_id: str) -> Optional[Dict]:
         """Добавить товар в избранное"""
         try:
             session = await self._get_session()
             async with session.post(
                 f"{self.base_url}/api/favorites/",
-                json={"user_id": user_tg_id, "product_id": product_id}
+                json={"user_id": user_id, "product_id": product_id}
             ) as response:
                 if response.status == 200:
                     return await response.json()
@@ -236,7 +236,7 @@ class APIClient:
         try:
             session = await self._get_session()
             payload = {
-                "tg_id": tg_id,
+                "user_id": tg_id,
                 "file_id": file_id,
                 "file_path": file_path,
                 "consent_given": consent_given
@@ -265,7 +265,7 @@ class APIClient:
         try:
             session = await self._get_session()
             payload = {
-                "tg_id": tg_id,
+                "user_id": tg_id,
                 "product_id": product_id,
                 "user_photo_id": photo_id
             }
