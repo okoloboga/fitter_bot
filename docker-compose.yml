@@ -46,6 +46,7 @@ services:
     volumes:
       - ./api:/app/api
       - ./config:/app/config
+      - storage_data:/app/storage
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
       interval: 10s

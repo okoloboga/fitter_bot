@@ -237,12 +237,16 @@ async def create_tryon(req: TryOnCreateRequest, db: AsyncSession = Depends(get_d
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class TryOnUpdateRequest(BaseModel):
+    status: str
+    result_file_path: Optional[str] = None
+    generation_time: Optional[int] = None
+
+
 @router.put("/tryon/{tryon_id}")
 async def update_tryon(
     tryon_id: int,
-    result_file_path: Optional[str] = None,
-    generation_time: Optional[int] = None,
-    status: str = "success",
+    req: TryOnUpdateRequest,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -255,11 +259,15 @@ async def update_tryon(
         if not tryon:
             raise HTTPException(status_code=404, detail="Try-on not found")
 
-        tryon.result_file_path = result_file_path
-        tryon.generation_time = generation_time
-        tryon.status = status
+        tryon.status = req.status
+        if req.result_file_path is not None:
+            tryon.result_file_path = req.result_file_path
+        if req.generation_time is not None:
+            tryon.generation_time = req.generation_time
 
         await db.commit()
+
+        logger.info(f"Updated try-on {tryon_id}: status={req.status}, path={req.result_file_path}")
 
         return {"success": True}
 

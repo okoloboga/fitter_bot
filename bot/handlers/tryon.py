@@ -574,8 +574,9 @@ async def show_tryon_history(callback: CallbackQuery, state: FSMContext):
 async def show_tryon_card(message: Message, history: list, index: int, edit: bool = False):
     if not (0 <= index < len(history)): return
     tryon = history[index]
-    result_path = tryon["result_file_path"]
-    if not os.path.exists(result_path):
+    result_path = tryon.get("result_file_path")
+
+    if not result_path or not os.path.exists(result_path):
         text = f"❌ Файл примерки не найден\n\nПримерка {index+1} из {len(history)}"
         keyboard = get_history_navigation_keyboard(index, len(history), tryon["id"])
         if edit: await message.edit_text(text, reply_markup=keyboard)
