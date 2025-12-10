@@ -2,8 +2,9 @@
 Обработчики каталога товаров
 """
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InputMediaPhoto, URLInputFile, InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
+from aiogram.types import CallbackQuery, InputMediaPhoto, URLInputFile, InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile, FSInputFile
 from typing import Optional, List
+import logging
 
 from bot.keyboards.catalog import (
     get_categories_keyboard,
@@ -12,6 +13,9 @@ from bot.keyboards.catalog import (
 )
 from bot.utils.api_client import api_client
 from bot.utils.image_processor import get_optimized_photo
+from bot.services.photo_preloader import photo_preloader
+
+logger = logging.getLogger(__name__)
 
 router = Router()
 
@@ -67,6 +71,46 @@ def get_all_valid_photo_urls(product: dict) -> List[str]:
     ]
 
     return [url for url in urls if url and isinstance(url, str) and url.strip() and url != ""]
+
+
+async def get_product_photo(product: dict, prefer_collage: bool = True) -> Optional[BufferedInputFile | FSInputFile]:
+    """
+    Получить оптимизированное фото товара (из локального хранилища или с URL).
+
+    Args:
+        product: Словарь с данными товара
+        prefer_collage: Предпочитать коллаж (True) или первое фото (False)
+
+    Returns:
+        FSInputFile (если есть локальное фото) или BufferedInputFile (если скачано с URL) или None
+    """
+    product_id = product.get('product_id')
+    if not product_id:
+        logger.warning("Product ID is missing")
+        return None
+
+    # Определяем приоритет фото
+    if prefer_collage:
+        photo_types = ['collage', '1', '2', '3', '4', '5', '6']
+    else:
+        photo_types = ['1', '2', '3', '4', '5', '6', 'collage']
+
+    # Пробуем получить локальное предзагруженное фото
+    for photo_type in photo_types:
+        local_path = photo_preloader.get_photo_path(product_id, photo_type)
+        if local_path and local_path.exists():
+            logger.info(f"Using local photo: {local_path.name}")
+            return FSInputFile(local_path)
+
+    # Fallback: скачиваем и оптимизируем на лету (как раньше)
+    logger.warning(f"Local photo not found for product {product_id}, falling back to URL download")
+
+    photo_url = get_valid_photo_url(product)
+    if not photo_url:
+        logger.warning(f"No valid photo URL for product {product_id}")
+        return None
+
+    return await get_optimized_photo(photo_url)
 
 
 async def format_product_message(product: dict, user_id: int, current_index: int, total_count: int):
@@ -147,25 +191,15 @@ async def show_category_products(callback: CallbackQuery):
     except:
         pass
 
-    photo_url = get_valid_photo_url(product)
-    if photo_url:
-        optimized_photo = await get_optimized_photo(photo_url)
-        if optimized_photo:
-            await callback.message.answer_photo(
-                photo=optimized_photo,
-                caption=message_text,
-                reply_markup=get_product_keyboard(
-                    product, category_id, 0, len(products), is_fav
-                ),
-            )
-        else:
-            # Fallback if optimization fails
-            await callback.message.answer(
-                f"📷 Не удалось загрузить фото\n\n{message_text}",
-                reply_markup=get_product_keyboard(
-                    product, category_id, 0, len(products), is_fav
-                ),
-            )
+    photo = await get_product_photo(product)
+    if photo:
+        await callback.message.answer_photo(
+            photo=photo,
+            caption=message_text,
+            reply_markup=get_product_keyboard(
+                product, category_id, 0, len(products), is_fav
+            ),
+        )
     else:
         # Fallback: отправить текстовое сообщение, если нет фото
         await callback.message.answer(
@@ -204,20 +238,15 @@ async def navigate_products(callback: CallbackQuery):
     message_text = await format_product_message(product, user_id, new_index, len(products))
     is_fav = await api_client.check_favorite(user_id, product['product_id'])
 
-    photo_url = get_valid_photo_url(product)
-    if not photo_url:
-        await callback.answer("Фото товара недоступно", show_alert=True)
-        return
-
-    optimized_photo = await get_optimized_photo(photo_url)
-    if not optimized_photo:
+    photo = await get_product_photo(product)
+    if not photo:
         await callback.answer("Не удалось загрузить фото товара", show_alert=True)
         return
 
     try:
         await callback.message.edit_media(
             media=InputMediaPhoto(
-                media=optimized_photo,
+                media=photo,
                 caption=message_text
             ),
             reply_markup=get_product_keyboard(
@@ -232,7 +261,7 @@ async def navigate_products(callback: CallbackQuery):
         # Fallback if edit_media fails (e.g., message is too old)
         await callback.message.delete()
         await callback.message.answer_photo(
-            photo=optimized_photo,
+            photo=photo,
             caption=message_text,
             reply_markup=get_product_keyboard(
                 product,
@@ -294,25 +323,15 @@ async def back_to_product(callback: CallbackQuery):
 
     await callback.message.delete()
 
-    photo_url = get_valid_photo_url(product)
-    if photo_url:
-        optimized_photo = await get_optimized_photo(photo_url)
-        if optimized_photo:
-            await callback.message.answer_photo(
-                photo=optimized_photo,
-                caption=message_text,
-                reply_markup=get_product_keyboard(
-                    product, category_id, index, len(products), is_fav
-                ),
-            )
-        else:
-            # Fallback if optimization fails
-            await callback.message.answer(
-                f"📷 Не удалось загрузить фото\n\n{message_text}",
-                reply_markup=get_product_keyboard(
-                    product, category_id, index, len(products), is_fav
-                ),
-            )
+    photo = await get_product_photo(product)
+    if photo:
+        await callback.message.answer_photo(
+            photo=photo,
+            caption=message_text,
+            reply_markup=get_product_keyboard(
+                product, category_id, index, len(products), is_fav
+            ),
+        )
     else:
         # Fallback: отправить текстовое сообщение, если нет фото
         await callback.message.answer(
@@ -394,20 +413,13 @@ async def view_product(callback: CallbackQuery):
 
     await callback.message.delete()
 
-    photo_url = get_valid_photo_url(product)
-    if photo_url:
-        optimized_photo = await get_optimized_photo(photo_url)
-        if optimized_photo:
-            await callback.message.answer_photo(
-                photo=optimized_photo,
-                caption=message_text,
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
-            )
-        else:
-            await callback.message.answer(
-                f"📷 Не удалось загрузить фото\n\n{message_text}",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
-            )
+    photo = await get_product_photo(product)
+    if photo:
+        await callback.message.answer_photo(
+            photo=photo,
+            caption=message_text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
     else:
         await callback.message.answer(
             f"📷 Фото недоступно\n\n{message_text}",
