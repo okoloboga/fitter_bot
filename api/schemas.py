@@ -81,6 +81,58 @@ class FavoriteResponse(BaseModel):
         from_attributes = True
 
 
+# User Photo schemas
+class UserPhotoCreate(BaseModel):
+    user_id: int
+    file_id: str
+    file_path: str
+    consent_given: bool
+
+
+class UserPhotoResponse(BaseModel):
+    id: int
+    user_id: int
+    file_id: str
+    uploaded_at: datetime
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class UserPhotosResponse(BaseModel):
+    photos: list[UserPhotoResponse]
+
+
+# Try-on History schemas
+class TryOnHistoryCreate(BaseModel):
+    user_id: int
+    product_id: str
+    user_photo_id: int
+    wb_link: Optional[str] = None
+    ozon_url: Optional[str] = None
+
+
+class TryOnHistoryResponse(BaseModel):
+    id: int
+    user_id: int
+    product_id: str
+    user_photo_id: int
+    result_file_path: Optional[str]
+    created_at: datetime
+    status: str
+    wb_link: Optional[str]
+    ozon_url: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class TryOnHistoryListResponse(BaseModel):
+    history: list[TryOnHistoryResponse]
+
+
+
 # Size recommendation schemas
 class SizeRecommendRequest(BaseModel):
     user_id: int

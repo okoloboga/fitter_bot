@@ -11,43 +11,19 @@ import logging
 
 from api.database import get_db
 from api.models import User, UserPhoto, TryOnHistory
-from pydantic import BaseModel
+from api.schemas import (
+    UserPhotoCreate,
+    UserPhotoResponse,
+    UserPhotosResponse,
+    TryOnHistoryCreate,
+    TryOnHistoryResponse,
+    TryOnHistoryListResponse
+)
+from api.services.sheets import get_product_by_id_from_sheets
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["photos"])
-
-
-# Pydantic schemas
-class PhotoUploadRequest(BaseModel):
-    tg_id: int
-    file_id: str
-    file_path: str
-    consent_given: bool
-
-
-class PhotoResponse(BaseModel):
-    id: int
-    file_id: str
-    file_path: str
-    uploaded_at: datetime
-    is_active: bool
-
-
-class TryOnCreateRequest(BaseModel):
-    tg_id: int
-    product_id: str
-    user_photo_id: int
-
-
-class TryOnResponse(BaseModel):
-    id: int
-    product_id: str
-    user_photo_id: int
-    result_file_path: Optional[str]
-    created_at: datetime
-    generation_time: Optional[int]
-    status: str
 
 
 class TryOnStatsResponse(BaseModel):
@@ -61,8 +37,8 @@ class TryOnStatsResponse(BaseModel):
 
 # === Photo Management ===
 
-@router.post("/photos/upload")
-async def upload_photo(req: PhotoUploadRequest, db: AsyncSession = Depends(get_db)):
+@router.post("/photos/upload", response_model=dict)
+async def upload_photo(req: UserPhotoCreate, db: AsyncSession = Depends(get_db)):
     """
     Сохранение фото пользователя в БД
     """
@@ -190,7 +166,7 @@ async def delete_photo(photo_id: int, db: AsyncSession = Depends(get_db)):
 # === Try-On Management ===
 
 @router.post("/tryon/create")
-async def create_tryon(req: TryOnCreateRequest, db: AsyncSession = Depends(get_db)):
+async def create_tryon(req: TryOnHistoryCreate, db: AsyncSession = Depends(get_db)):
     """
     Создание записи о примерке (статус processing)
     """
@@ -201,7 +177,7 @@ async def create_tryon(req: TryOnCreateRequest, db: AsyncSession = Depends(get_d
             select(func.count(TryOnHistory.id))
             .where(
                 and_(
-                    TryOnHistory.user_id == req.tg_id,
+                    TryOnHistory.user_id == req.user_id,
                     func.date(TryOnHistory.created_at) == today
                 )
             )
@@ -215,12 +191,19 @@ async def create_tryon(req: TryOnCreateRequest, db: AsyncSession = Depends(get_d
                 "message": "Ты достиг лимита примерок на сегодня (10/10). Попробуй завтра! 😊"
             }
 
+        # Получаем данные о товаре из Google Sheets
+        product = await get_product_by_id_from_sheets(req.product_id)
+        wb_link = product.get("wb_link") if product else None
+        ozon_url = product.get("ozon_url") if product else None
+
         # Создаем запись
         tryon = TryOnHistory(
-            user_id=req.tg_id,
+            user_id=req.user_id,
             product_id=req.product_id,
             user_photo_id=req.user_photo_id,
-            status="processing"
+            status="processing",
+            wb_link=wb_link,
+            ozon_url=ozon_url
         )
 
         db.add(tryon)
@@ -278,7 +261,7 @@ async def update_tryon(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/tryon/history/{tg_id}")
+@router.get("/tryon/history/{tg_id}", response_model=TryOnHistoryListResponse)
 async def get_tryon_history(tg_id: int, db: AsyncSession = Depends(get_db)):
     """
     Получение истории примерок пользователя
@@ -297,14 +280,17 @@ async def get_tryon_history(tg_id: int, db: AsyncSession = Depends(get_db)):
         history = result.scalars().all()
 
         return {
-            "success": True,
             "history": [
                 {
                     "id": item.id,
+                    "user_id": item.user_id,
                     "product_id": item.product_id,
+                    "user_photo_id": item.user_photo_id,
                     "result_file_path": item.result_file_path,
-                    "created_at": item.created_at.isoformat(),
-                    "generation_time": item.generation_time
+                    "created_at": item.created_at,
+                    "status": item.status,
+                    "wb_link": item.wb_link,
+                    "ozon_url": item.ozon_url,
                 }
                 for item in history
             ]

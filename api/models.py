@@ -101,6 +101,8 @@ class TryOnHistory(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     generation_time = Column(Integer, nullable=True)  # Время генерации в секундах
     status = Column(String(20), nullable=False, default="processing")  # processing, success, failed
+    wb_link = Column(String(500), nullable=True)  # Ссылка на Wildberries
+    ozon_url = Column(String(500), nullable=True) # Ссылка на Ozon
 
     # Relationships
     user = relationship("User", back_populates="try_on_history")

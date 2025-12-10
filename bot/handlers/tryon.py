@@ -600,7 +600,7 @@ async def show_tryon_card(message: Message, history: list, index: int, edit: boo
 
     if not result_path or not os.path.exists(result_path):
         text = f"❌ Файл примерки не найден\n\nПримерка {index+1} из {len(history)}"
-        keyboard = get_history_navigation_keyboard(index, len(history), tryon["id"])
+        keyboard = get_history_navigation_keyboard(index, len(history), tryon)
         if edit: await message.edit_text(text, reply_markup=keyboard)
         else: await message.answer(text, reply_markup=keyboard)
         return
@@ -610,22 +610,44 @@ async def show_tryon_card(message: Message, history: list, index: int, edit: boo
     product_name = product_data["name"] if product_data else product_id
     result_photo = FSInputFile(result_path)
     caption = f"👗 {product_name}\n\n📅 {datetime.fromisoformat(tryon['created_at']).strftime('%d.%m.%Y')}\n\nПримерка {index+1} из {len(history)}"
-    keyboard = get_history_navigation_keyboard(index, len(history), tryon["id"])
+    keyboard = get_history_navigation_keyboard(index, len(history), tryon)
     if edit: await message.delete()
     await message.answer_photo(photo=result_photo, caption=caption, reply_markup=keyboard)
 
 
-def get_history_navigation_keyboard(index: int, total: int, tryon_id: int):
+def get_history_navigation_keyboard(index: int, total: int, tryon: dict):
+    buttons = []
+    
+    # Кнопки магазинов
+    shop_buttons = []
+    wb_link = tryon.get('wb_link')
+    ozon_url = tryon.get('ozon_url')
+    if wb_link:
+        shop_buttons.append(InlineKeyboardButton(text="🔗 Купить на WB", url=wb_link))
+    if ozon_url:
+        shop_buttons.append(InlineKeyboardButton(text="🔗 Купить на Ozon", url=ozon_url))
+    
+    if shop_buttons:
+        buttons.append(shop_buttons)
+
+    # Навигация
     nav_row = []
     if index > 0: nav_row.append(InlineKeyboardButton(text="◀️", callback_data=f"tryon_hist:prev:{index}"))
     nav_row.append(InlineKeyboardButton(text=f"({index+1}/{total})", callback_data="noop"))
     if index < total - 1: nav_row.append(InlineKeyboardButton(text="▶️", callback_data=f"tryon_hist:next:{index}"))
-    return InlineKeyboardMarkup(inline_keyboard=[
-        nav_row,
+    
+    if nav_row:
+        buttons.append(nav_row)
+
+    # Управление и выход
+    tryon_id = tryon["id"]
+    buttons.extend([
         [InlineKeyboardButton(text="💾 Скачать", callback_data=f"tryon_hist:download:{tryon_id}"),
          InlineKeyboardButton(text="🗑 Удалить", callback_data=f"tryon_hist:delete:{tryon_id}")],
         [InlineKeyboardButton(text="◀️ В главное меню", callback_data="main_menu")]
     ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 @router.callback_query(F.data.startswith("tryon_hist:"))
