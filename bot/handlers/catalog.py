@@ -369,64 +369,7 @@ async def try_on_coming_soon(callback: CallbackQuery):
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("product:"))
-async def view_product(callback: CallbackQuery):
-    """Просмотр товара (без навигации)"""
-    product_id = callback.data.split(":")[1]
-    user_id = callback.from_user.id
 
-    product = await api_client.get_product_by_id(product_id)
-    if not product:
-        await callback.answer("❌ Товар не найден.", show_alert=True)
-        return
-
-    is_fav = await api_client.check_favorite(user_id, product_id)
-
-    # Формируем сообщение без навигации
-    message_text = f"👗 {product['name']}\n\n{product['description']}\n\n"
-    if product.get('available_sizes'):
-        message_text += f"📏 Доступные размеры: {product['available_sizes']}"
-
-    # Клавиатура без навигации
-    keyboard = []
-
-    # Кнопки магазинов
-    shop_buttons = []
-    if product.get('wb_link'):
-        shop_buttons.append(InlineKeyboardButton(text="🛒 WB", url=product['wb_link']))
-    if product.get('ozon_url'):
-        shop_buttons.append(InlineKeyboardButton(text="🛒 Ozon", url=product['ozon_url']))
-    if shop_buttons:
-        keyboard.append(shop_buttons)
-
-    # Кнопка избранного
-    if is_fav:
-        keyboard.append([InlineKeyboardButton(text="💔 Убрать из избранного", callback_data=f"fav:remove:{product_id}")])
-    else:
-        keyboard.append([InlineKeyboardButton(text="💖 В избранное", callback_data=f"fav:add:{product_id}")])
-
-    # Кнопка примерки
-    keyboard.append([InlineKeyboardButton(text="👗 Примерить", callback_data=f"tryon:start:{product_id}")])
-
-    # Кнопка назад
-    keyboard.append([InlineKeyboardButton(text="◀️ В каталог", callback_data="catalog")])
-
-    await callback.message.delete()
-
-    photo = await get_product_photo(product)
-    if photo:
-        await callback.message.answer_photo(
-            photo=photo,
-            caption=message_text,
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
-        )
-    else:
-        await callback.message.answer(
-            f"📷 Фото недоступно\n\n{message_text}",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
-        )
-
-    await callback.answer()
 
 
 @router.callback_query(F.data == "close_tryon")

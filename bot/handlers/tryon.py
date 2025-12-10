@@ -110,7 +110,8 @@ def get_model_selection_keyboard():
     ])
 
 
-def get_tryon_result_keyboard(product_id: str, wb_link: str, ozon_url: str = None):
+def get_tryon_result_keyboard(product_id: str, wb_link: str, ozon_url: str = None,
+                              source: str = 'catalog', category_id: str = '', index: int = 0):
     """Клавиатура после успешной примерки"""
     keyboard = []
 
@@ -123,16 +124,25 @@ def get_tryon_result_keyboard(product_id: str, wb_link: str, ozon_url: str = Non
 
     if shop_buttons:
         if len(shop_buttons) == 2:
-            # Две кнопки в одну строку
             keyboard.append(shop_buttons)
         else:
-            # Одна кнопка в строку
             keyboard.append([shop_buttons[0]])
+
+    # Формируем коллбэк для возврата
+    if source == 'catalog':
+        back_callback = f"back:product:{product_id}:{category_id}:{index}"
+    elif source == 'favorites':
+        back_callback = f"back_fav:{product_id}:{index}"
+    else:
+        # Фоллбэк на старое поведение, если источник неизвестен
+        back_callback = f"product:{product_id}"
+        
+    retry_callback = f"tryon:retry:{source}:{product_id}:{category_id}:{index}"
 
     keyboard.extend([
         [InlineKeyboardButton(text="💾 Сохранить результат", callback_data="tryon:save_result")],
-        [InlineKeyboardButton(text="🔄 Другое фото", callback_data=f"tryon:retry:{product_id}")],
-        [InlineKeyboardButton(text="◀️ К товару", callback_data=f"product:{product_id}")]
+        [InlineKeyboardButton(text="🔄 Другое фото", callback_data=retry_callback)],
+        [InlineKeyboardButton(text="◀️ К товару", callback_data=back_callback)]
     ])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -156,7 +166,8 @@ def get_photo_manage_keyboard(photo_id: int):
 
 @router.callback_query(F.data.startswith("tryon:start:"))
 async def start_tryon(callback: CallbackQuery, state: FSMContext):
-    product_id = callback.data.split(":")[2]
+    _prefix, source, product_id, category_id, index_str = callback.data.split(":")
+    index = int(index_str)
     tg_id = callback.from_user.id
     try:
         product_data = await api_client.get_product_by_id(product_id)
@@ -165,7 +176,10 @@ async def start_tryon(callback: CallbackQuery, state: FSMContext):
             return
 
         await state.update_data(
+            source=source,
             product_id=product_id,
+            category_id=category_id,
+            index=index,
             product_name=product_data.get("name"),
             wb_link=product_data.get("wb_link"),
             ozon_url=product_data.get("ozon_url"),
@@ -200,7 +214,8 @@ async def start_tryon(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("tryon:retry:"))
 async def retry_tryon(callback: CallbackQuery, state: FSMContext):
     """Повторная примерка с другим фото"""
-    product_id = callback.data.split(":")[2]
+    _prefix, source, product_id, category_id, index_str = callback.data.split(":")
+    index = int(index_str)
     tg_id = callback.from_user.id
     try:
         product_data = await api_client.get_product_by_id(product_id)
@@ -209,7 +224,10 @@ async def retry_tryon(callback: CallbackQuery, state: FSMContext):
             return
 
         await state.update_data(
+            source=source,
             product_id=product_id,
+            category_id=category_id,
+            index=index,
             product_name=product_data.get("name"),
             wb_link=product_data.get("wb_link"),
             ozon_url=product_data.get("ozon_url"),
@@ -384,6 +402,10 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
         wb_link = fsm_data.get("wb_link", "https://www.wildberries.ru/")
         ozon_url = fsm_data.get("ozon_url")
         product_photo_urls = fsm_data.get("product_photo_urls", [])
+        source = fsm_data.get("source", "catalog")
+        category_id = fsm_data.get("category_id", "")
+        index = fsm_data.get("index", 0)
+
         if not all([product_name, product_photo_urls]):
             await status_msg.edit_text("❌ Ошибка: данные о товаре не найдены в сессии.")
             await api_client.update_tryon(tryon_id, status="failed")
@@ -430,7 +452,7 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
         await message.answer_photo(
             photo=result_photo,
             caption=f"Вот как на тебе будет смотреться {product_name}! 💫",
-            reply_markup=get_tryon_result_keyboard(product_id, wb_link, ozon_url)
+            reply_markup=get_tryon_result_keyboard(product_id, wb_link, ozon_url, source, category_id, index)
         )
         await status_msg.delete()
     except Exception as e:
