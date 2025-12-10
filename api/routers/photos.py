@@ -19,7 +19,7 @@ from api.schemas import (
     TryOnHistoryResponse,
     TryOnHistoryListResponse
 )
-from api.services.sheets import get_product_by_id_from_sheets
+from api.services.sheets import sheets_service
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +192,7 @@ async def create_tryon(req: TryOnHistoryCreate, db: AsyncSession = Depends(get_d
             }
 
         # Получаем данные о товаре из Google Sheets
-        product = await get_product_by_id_from_sheets(req.product_id)
+        product = sheets_service.get_product_by_id(req.product_id)
         wb_link = product.get("wb_link") if product else None
         ozon_url = product.get("ozon_url") if product else None
 
