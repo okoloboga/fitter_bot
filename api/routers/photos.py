@@ -46,7 +46,7 @@ async def upload_photo(req: UserPhotoCreate, db: AsyncSession = Depends(get_db))
     """
     try:
         # Проверяем пользователя
-        result = await db.execute(select(User).where(User.tg_id == req.tg_id))
+        result = await db.execute(select(User).where(User.tg_id == req.user_id))
         user = result.scalar_one_or_none()
 
         if not user:
@@ -54,7 +54,7 @@ async def upload_photo(req: UserPhotoCreate, db: AsyncSession = Depends(get_db))
 
         # Проверяем лимит фото (максимум 3)
         result = await db.execute(
-            select(func.count(UserPhoto.id)).where(UserPhoto.user_id == req.tg_id)
+            select(func.count(UserPhoto.id)).where(UserPhoto.user_id == req.user_id)
         )
         photo_count = result.scalar() or 0
 
@@ -62,7 +62,7 @@ async def upload_photo(req: UserPhotoCreate, db: AsyncSession = Depends(get_db))
             # Удаляем самое старое фото
             result = await db.execute(
                 select(UserPhoto)
-                .where(UserPhoto.user_id == req.tg_id)
+                .where(UserPhoto.user_id == req.user_id)
                 .order_by(UserPhoto.uploaded_at.asc())
                 .limit(1)
             )
@@ -77,7 +77,7 @@ async def upload_photo(req: UserPhotoCreate, db: AsyncSession = Depends(get_db))
 
         # Создаем новое фото
         new_photo = UserPhoto(
-            user_id=req.tg_id,
+            user_id=req.user_id,
             file_id=req.file_id,
             file_path=req.file_path,
             consent_given=req.consent_given,
