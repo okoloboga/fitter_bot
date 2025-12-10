@@ -3,18 +3,64 @@
 """
 import logging
 import asyncio
+import os
 from typing import List, Dict, Any
 from datetime import datetime
 
 from gpt_integration.photo_processing.image_client import ImageGenerationClient
+from gpt_integration.photo_processing.prompts import (
+    TRYON_PROMPT_V1,
+    TRYON_PROMPT_V2,
+    TRYON_PROMPT_V3,
+    TRYON_PROMPT_V4,
+    TRYON_PROMPT_V5,
+    TRYON_PROMPT_V6,
+)
 
 logger = logging.getLogger(__name__)
 
+# Маппинг промптов
+PROMPT_VERSIONS = {
+    "v1": TRYON_PROMPT_V1,  # Основной (по умолчанию)
+    "v2": TRYON_PROMPT_V2,  # Короткий
+    "v3": TRYON_PROMPT_V3,  # С примерами
+    "v4": TRYON_PROMPT_V4,  # Step-by-step
+    "v5": TRYON_PROMPT_V5,  # Технический
+    "v6": TRYON_PROMPT_V6,  # Очень короткий
+}
 
-TRYON_PROMPT = """Создай реалистичное изображение, где человек с первого фото одет в одежду с других фото.
-Сохрани черты лица, прическу и позу человека.
-Одежда должна выглядеть естественно на фигуре с учетом складок и драпировки.
-Сохрани фон из оригинального фото пользователя."""
+# Получаем версию промпта из env (по умолчанию v1)
+PROMPT_VERSION = os.getenv("TRYON_PROMPT_VERSION", "v1")
+TRYON_PROMPT = PROMPT_VERSIONS.get(PROMPT_VERSION, TRYON_PROMPT_V1)
+
+logger.info(f"Using try-on prompt version: {PROMPT_VERSION}")
+
+
+# Старый промпт (оставлен для справки)
+TRYON_PROMPT_OLD = """Virtual clothing try-on task:
+
+FIRST IMAGE = the person trying on clothes (the customer).
+OTHER IMAGES = the clothing items to try on.
+
+IMPORTANT! KEEP FROM THE FIRST IMAGE:
+- The person (their face, body type, height, pose, arms, legs, skin tone)
+- The background (keep it exactly as is)
+- The lighting and color scheme
+- The photo quality and style
+
+CHANGE ONLY THE CLOTHING:
+- Put the clothing from other images onto THE PERSON FROM THE FIRST IMAGE
+- The clothing should fit naturally on their body
+- Include realistic fabric folds, draping, and fit
+- The clothing should match the person's pose
+
+DO NOT CHANGE:
+- The person (DO NOT replace them with the model from the clothing photos!)
+- The background (keep the background from the first image!)
+- The pose and body position
+- The person's physical features
+
+Result: same person, same background, new clothing only."""
 
 
 async def generate_tryon(
