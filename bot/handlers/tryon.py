@@ -166,7 +166,7 @@ def get_photo_manage_keyboard(photo_id: int):
 
 @router.callback_query(F.data.startswith("tryon:start:"))
 async def start_tryon(callback: CallbackQuery, state: FSMContext):
-    _prefix, source, product_id, category_id, index_str = callback.data.split(":")
+    _tryon, _start, source, product_id, category_id, index_str = callback.data.split(":")
     index = int(index_str)
     tg_id = callback.from_user.id
     try:
@@ -214,7 +214,7 @@ async def start_tryon(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("tryon:retry:"))
 async def retry_tryon(callback: CallbackQuery, state: FSMContext):
     """Повторная примерка с другим фото"""
-    _prefix, source, product_id, category_id, index_str = callback.data.split(":")
+    _tryon, _retry, source, product_id, category_id, index_str = callback.data.split(":")
     index = int(index_str)
     tg_id = callback.from_user.id
     try:
