@@ -13,6 +13,7 @@ from PIL import Image
 import io
 import base64
 
+from bot.keyboards.main_menu import get_main_menu
 from bot.states.tryon import TryOnStates
 from bot.utils.api_client import api_client
 from gpt_integration.photo_processing.validator import validate_photo
@@ -693,5 +694,10 @@ async def handle_history_navigation(callback: CallbackQuery, state: FSMContext):
 async def cancel_tryon(callback: CallbackQuery, state: FSMContext):
     """Отмена примерки"""
     await state.clear()
-    await callback.message.edit_text("Примерка отменена")
+    # Check if user has history to show the correct main menu
+    has_history = await api_client.has_tryon_history(callback.from_user.id)
+    await callback.message.edit_text(
+        "Примерка отменена. Вы в главном меню.",
+        reply_markup=get_main_menu(has_tryon_history=has_history)
+    )
     await callback.answer()
