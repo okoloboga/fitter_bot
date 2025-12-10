@@ -2,7 +2,7 @@
 Обработчики команды /start и главного меню
 """
 from aiogram import Router, F
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
@@ -46,9 +46,12 @@ ABOUT_TEXT = """ℹ️ О боте
 Приятного шопинга! ✨"""
 
 
-@router.message(Command("start"))
+@router.message(Command("start"), StateFilter("*"))
 async def cmd_start(message: Message, state: FSMContext):
-    """Обработчик команды /start"""
+    """Обработчик команды /start - работает из любого состояния"""
+    # Сбрасываем любое активное состояние FSM
+    await state.clear()
+
     # Регистрируем или обновляем пользователя
     await api_client.register_user(
         tg_id=message.from_user.id,
@@ -59,7 +62,6 @@ async def cmd_start(message: Message, state: FSMContext):
     # Проверяем наличие истории примерок
     has_history = await api_client.has_tryon_history(message.from_user.id)
 
-    await state.clear()
     await message.answer(
         WELCOME_TEXT,
         reply_markup=get_main_menu(has_tryon_history=has_history)
