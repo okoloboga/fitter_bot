@@ -9,6 +9,8 @@ from datetime import datetime, date
 import os
 import logging
 
+from pydantic import BaseModel
+
 from api.database import get_db
 from api.models import User, UserPhoto, TryOnHistory
 from api.schemas import (
