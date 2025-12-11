@@ -72,14 +72,35 @@ class SizeMatcherService:
     ) -> Dict:
         """Подобрать размер на основе параметров пользователя."""
         if not user_measurements:
-            return {"success": False, "message": "📐 Укажи свои параметры, чтобы получить рекомендацию по размеру", "reason": "no_measurements"}
+            return {
+                "success": False,
+                "message": "📐 Укажи свои параметры, чтобы получить рекомендацию по размеру",
+                "confidence": "none",
+                "recommended_size": None,
+                "alternative_size": None,
+                "details": {"reason": "no_measurements"}
+            }
 
         if not size_table:
-            return {"success": False, "message": "⚠️ Таблица размеров не найдена", "reason": "no_size_table"}
+            return {
+                "success": False,
+                "message": "⚠️ Таблица размеров не найдена",
+                "confidence": "none",
+                "recommended_size": None,
+                "alternative_size": None,
+                "details": {"reason": "no_size_table"}
+            }
 
         filtered_table = [row for row in size_table if row.get('size') in available_sizes]
         if not filtered_table:
-            return {"success": False, "message": "⚠️ Не удалось подобрать размер. Рекомендуем уточнить у продавца", "reason": "no_available_sizes"}
+            return {
+                "success": False,
+                "message": "⚠️ Не удалось подобрать размер. Рекомендуем уточнить у продавца",
+                "confidence": "none",
+                "recommended_size": None,
+                "alternative_size": None,
+                "details": {"reason": "no_available_sizes"}
+            }
 
         # Инициализируем скор для каждого доступного размера
         size_scores = {row['size']: {'score': 0, 'matched_params': []} for row in filtered_table}
@@ -146,13 +167,27 @@ class SizeMatcherService:
 
         # --- Обработка результатов ---
         if max_possible_score == 0:
-            return {"success": False, "message": "⚠️ Нет общих параметров для сравнения. Заполните больше данных", "reason": "no_common_params"}
+            return {
+                "success": False,
+                "message": "⚠️ Нет общих параметров для сравнения. Заполните больше данных",
+                "confidence": "none",
+                "recommended_size": None,
+                "alternative_size": None,
+                "details": {"reason": "no_common_params"}
+            }
 
         # Конвертируем в список и сортируем
         sorted_scores = sorted(size_scores.items(), key=lambda item: item[1]['score'], reverse=True)
 
         if not sorted_scores or sorted_scores[0][1]['score'] == 0:
-            return {"success": False, "message": "⚠️ Не удалось подобрать размер. Рекомендуем уточнить у продавца", "reason": "no_match"}
+            return {
+                "success": False,
+                "message": "⚠️ Не удалось подобрать размер. Рекомендуем уточнить у продавца",
+                "confidence": "none",
+                "recommended_size": None,
+                "alternative_size": None,
+                "details": {"reason": "no_match"}
+            }
 
         best_match_size, best_match_data = sorted_scores[0]
         score = best_match_data['score']
