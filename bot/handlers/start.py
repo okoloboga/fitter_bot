@@ -9,6 +9,7 @@ from aiogram.fsm.context import FSMContext
 from bot.keyboards.main_menu import get_main_menu
 from bot.keyboards.catalog import get_categories_keyboard
 from bot.utils.api_client import api_client
+from bot.handlers.onboarding import start_onboarding
 
 router = Router()
 
@@ -59,11 +60,18 @@ async def cmd_start(message: Message, state: FSMContext):
         first_name=message.from_user.first_name
     )
 
-    # Проверяем наличие истории примерок
-    has_history = await api_client.has_tryon_history(message.from_user.id)
+    # Проверяем, является ли пользователь новым (нет обязательного параметра russian_size)
+    measurements = await api_client.get_measurements(message.from_user.id)
 
+    # Если параметров нет или нет обязательного russian_size - запускаем онбординг
+    if not measurements or not measurements.get("russian_size"):
+        await start_onboarding(message, state)
+        return
+
+    # Для существующих пользователей - показываем главное меню
+    has_history = await api_client.has_tryon_history(message.from_user.id)
     await message.answer(
-        WELCOME_TEXT,
+        WELCOME_BACK_TEXT,
         reply_markup=get_main_menu(has_tryon_history=has_history)
     )
 

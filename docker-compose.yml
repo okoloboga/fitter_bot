@@ -1,78 +1,74 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: fitting_bot_postgres
-    environment:
-      POSTGRES_DB: fitting_bot
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "15432:5432"
+  db:
+    image: postgres:16
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    expose:
+      - "5432"
+    ports:
+      - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+      interval: 5s
       timeout: 5s
       retries: 5
+    restart: always
+    env_file:
+      - .env
 
   redis:
     image: redis:7-alpine
-    container_name: fitting_bot_redis
+    expose:
+      - "6379"
     ports:
-      - "16379:6379"
-    volumes:
-      - redis_data:/data
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 5
+    restart: always
 
   api:
     build: .
-    container_name: fitting_bot_api
     command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
-    env_file:
-      - .env
+    volumes:
+      - .:/app
     ports:
       - "8000:8000"
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
-    restart: unless-stopped
-    volumes:
-      - ./api:/app/api
-      - ./config:/app/config
-      - storage_data:/app/storage
+      redis:
+        condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
       retries: 5
-      start_period: 30s
+    restart: always
+    env_file:
+      - .env
 
   bot:
     build: .
-    container_name: fitting_bot
     command: python main.py
-    env_file:
-      - .env
+    volumes:
+      - .:/app
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
       api:
         condition: service_healthy
-    restart: unless-stopped
-    volumes:
-      - ./bot:/app/bot
-      - ./main.py:/app/main.py
-      - ./config:/app/config
-      - storage_data:/app/storage
+      redis:
+        condition: service_started
+    restart: always
+    env_file:
+      - .env
 
 volumes:
   postgres_data:

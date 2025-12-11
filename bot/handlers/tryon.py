@@ -111,7 +111,16 @@ def get_model_selection_keyboard():
     ])
 
 
-def get_tryon_result_keyboard(product_id: str, wb_link: str, ozon_url: str = None,
+def get_tryon_mode_keyboard():
+    """Клавиатура выбора режима примерки"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👕 Только этот товар", callback_data="tryon:mode:single_item")],
+        [InlineKeyboardButton(text="👗 Весь образ с фото", callback_data="tryon:mode:full_outfit")],
+        [InlineKeyboardButton(text="◀️ Отмена", callback_data="tryon:cancel")]
+    ])
+
+
+def get_tryon_result_keyboard(tryon_id: int, product_id: str, wb_link: str, ozon_url: str = None,
                               source: str = 'catalog', category_id: str = '', index: int = 0):
     """Клавиатура после успешной примерки"""
     keyboard = []
@@ -119,9 +128,9 @@ def get_tryon_result_keyboard(product_id: str, wb_link: str, ozon_url: str = Non
     # Кнопки магазинов в одну строку если есть обе ссылки
     shop_buttons = []
     if wb_link:
-        shop_buttons.append(InlineKeyboardButton(text="🔗 Купить на WB", url=wb_link))
+        shop_buttons.append(InlineKeyboardButton(text="Wildberries", url=wb_link))
     if ozon_url:
-        shop_buttons.append(InlineKeyboardButton(text="🔗 Купить на Ozon", url=ozon_url))
+        shop_buttons.append(InlineKeyboardButton(text="Ozon", url=ozon_url))
 
     if shop_buttons:
         if len(shop_buttons) == 2:
@@ -141,7 +150,7 @@ def get_tryon_result_keyboard(product_id: str, wb_link: str, ozon_url: str = Non
     retry_callback = f"tryon:retry:{source}:{product_id}:{category_id}:{index}"
 
     keyboard.extend([
-        [InlineKeyboardButton(text="💾 Сохранить результат", callback_data="tryon:save_result")],
+        [InlineKeyboardButton(text="💾 Сохранить результат", callback_data=f"tryon:save_result:{tryon_id}")],
         [InlineKeyboardButton(text="🔄 Другое фото", callback_data=retry_callback)],
         [InlineKeyboardButton(text="◀️ К товару", callback_data=back_callback)]
     ])
@@ -176,6 +185,7 @@ async def start_tryon(callback: CallbackQuery, state: FSMContext):
             await callback.answer("❌ Товар не найден. Возможно, он был удален.", show_alert=True)
             return
 
+        # Сохраняем базовую информацию о товаре в state
         await state.update_data(
             source=source,
             product_id=product_id,
@@ -186,27 +196,24 @@ async def start_tryon(callback: CallbackQuery, state: FSMContext):
             ozon_url=product_data.get("ozon_url"),
             product_photo_urls=[url for i in [1, 2] if (url := product_data.get(f"photo_{i}_url"))]
         )
+        
+        # Проверяем лимит примерок
         limit_result = await api_client.check_tryon_limit(tg_id)
         if limit_result and limit_result.get("limit_reached"):
             await callback.answer(f"Ты достиг лимита примерок на сегодня ({limit_result.get('count', 10)}/10). Попробуй завтра! 😊", show_alert=True)
             return
 
-        photos_result = await api_client.get_user_photos(tg_id)
-        photos = photos_result.get("photos", []) if photos_result else []
-
-        if not photos:
-            await state.set_state(TryOnStates.waiting_consent)
-            await callback.message.answer(
-                "Для работы примерки нам нужно обработать твое фото с помощью AI.\n\n" 
-                "Мы сохраним фото для повторного использования. " 
-                "Фото используется только для примерки и не передается третьим лицам.\n\n" 
-                "Согласен(на)?",
-                reply_markup=get_consent_keyboard()
-            )
-        else:
-            await state.set_state(TryOnStates.selecting_photo)
-            await callback.message.answer("Выбери фото для примерки:", reply_markup=get_photo_selection_keyboard(photos))
+        # Сразу запрашиваем режим примерки
+        await state.set_state(TryOnStates.waiting_tryon_mode)
+        await callback.message.answer(
+            "Выбери режим примерки:\n\n"
+            "👕 <b>Только этот товар</b> - на тебе изменится только выбранная вещь, остальная одежда останется твоей\n\n"
+            "👗 <b>Весь образ с фото</b> - на тебя примерят всю одежду, которая есть на модели с фото товара",
+            reply_markup=get_tryon_mode_keyboard(),
+            parse_mode="HTML"
+        )
         await callback.answer()
+
     except Exception as e:
         logger.error(f"Failed to start try-on: {e}", exc_info=True)
         await callback.answer("❌ Ошибка запуска примерки", show_alert=True)
@@ -340,6 +347,8 @@ async def photo_received(message: Message, state: FSMContext):
         await status_msg.edit_text("✅ Отлично! Фото принято")
         data = await state.get_data()
         if data.get("product_id"):
+            # Переходим к выбору модели
+            await state.set_state(TryOnStates.selecting_model)
             await message.answer("Отлично! Теперь выбери модель для генерации:", reply_markup=get_model_selection_keyboard())
         else:
             await message.answer("Фото сохранено! Теперь можешь примерять одежду 👗")
@@ -363,28 +372,72 @@ async def invalid_photo_received(message: Message):
 async def photo_selected(callback: CallbackQuery, state: FSMContext):
     photo_id = int(callback.data.split(":")[2])
     await state.update_data(photo_id=photo_id)
+    # Переходим к выбору модели
+    await state.set_state(TryOnStates.selecting_model)
     await callback.message.edit_text("Отлично! Теперь выбери модель для генерации:", reply_markup=get_model_selection_keyboard())
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("tryon:model:"))
+@router.callback_query(F.data.startswith("tryon:model:"), TryOnStates.selecting_model)
 async def model_selected(callback: CallbackQuery, state: FSMContext):
+    """Обработка выбора модели - запуск генерации"""
     model_type = callback.data.split(":")[2]
     model = "gemini-2.5-flash-image" if model_type == "fast" else "gemini-3-pro-image"
     model_name = "Быстрая" if model_type == "fast" else "Качественная"
+
+    # Сохраняем выбранную модель в state
+    await state.update_data(model=model, model_name=model_name)
+
+    # Получаем все данные из state для запуска генерации
     data = await state.get_data()
     product_id = data.get("product_id")
     photo_id = data.get("photo_id")
-    if not product_id or not photo_id:
+    tryon_mode = data.get("tryon_mode")
+
+    if not all([product_id, photo_id, model, tryon_mode]):
         await callback.answer("❌ Ошибка: сессия истекла, начните заново.", show_alert=True)
+        await state.clear()
         return
+
+    # Запускаем генерацию
     await callback.answer()
-    await start_generation(callback.message, state, product_id, photo_id, model, model_name)
+    # Удаляем клавиатуру, чтобы пользователь не нажал ничего лишнего
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await start_generation(callback.message, state, product_id, photo_id, model, model_name, tryon_mode)
+
+
+@router.callback_query(F.data.startswith("tryon:mode:"), TryOnStates.waiting_tryon_mode)
+async def tryon_mode_selected(callback: CallbackQuery, state: FSMContext):
+    """Обработка выбора режима примерки - переход к выбору/загрузке фото"""
+    tryon_mode = callback.data.split(":")[2]  # "single_item" или "full_outfit"
+    tg_id = callback.from_user.id
+
+    # Сохраняем режим примерки
+    await state.update_data(tryon_mode=tryon_mode)
+
+    # Теперь выполняем логику, которая раньше была в start_tryon
+    photos_result = await api_client.get_user_photos(tg_id)
+    photos = photos_result.get("photos", []) if photos_result else []
+
+    if not photos:
+        await state.set_state(TryOnStates.waiting_consent)
+        await callback.message.edit_text(
+            "Для работы примерки нам нужно обработать твое фото с помощью AI.\n\n"
+            "Мы сохраним фото для повторного использования. "
+            "Фото используется только для примерки и не передается третьим лицам.\n\n"
+            "Согласен(на)?",
+            reply_markup=get_consent_keyboard()
+        )
+    else:
+        await state.set_state(TryOnStates.selecting_photo)
+        await callback.message.edit_text("Выбери фото для примерки:", reply_markup=get_photo_selection_keyboard(photos))
+    
+    await callback.answer()
 
 
 # === Генерация примерки ===
 
-async def start_generation(message: Message, state: FSMContext, product_id: str, photo_id: int, model: str, model_name: str):
+async def start_generation(message: Message, state: FSMContext, product_id: str, photo_id: int, model: str, model_name: str, tryon_mode: str):
     tg_id = message.chat.id
     tryon_create_result = await api_client.create_tryon(tg_id, product_id, photo_id)
     if not tryon_create_result or not tryon_create_result.get("success"):
@@ -404,11 +457,19 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
         ozon_url = fsm_data.get("ozon_url")
         product_photo_urls = fsm_data.get("product_photo_urls", [])
         source = fsm_data.get("source", "catalog")
+
+        # Проверка наличия фото товара для примерки
+        if not product_photo_urls:
+            await status_msg.edit_text("❌ К сожалению, для этого товара нельзя сделать примерку, так как отсутствуют эталонные фото.")
+            await api_client.update_tryon(tryon_id, status="failed")
+            await state.clear()
+            return
+
         category_id = fsm_data.get("category_id", "")
         index = fsm_data.get("index", 0)
 
-        if not all([product_name, product_photo_urls]):
-            await status_msg.edit_text("❌ Ошибка: данные о товаре не найдены в сессии.")
+        if not product_name:
+            await status_msg.edit_text("❌ Ошибка: данные о товаре (название) не найдены в сессии.")
             await api_client.update_tryon(tryon_id, status="failed")
             await state.clear()
             return
@@ -425,7 +486,15 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
         api_key = os.getenv("IMAGE_GEN_API_KEY") or os.getenv("COMET_API_KEY")
         base_url = os.getenv("IMAGE_GEN_BASE_URL", "https://api.cometapi.com")
 
-        generation_result = await generate_tryon(user_photo_url, product_photo_urls, api_key, base_url, model)
+        generation_result = await generate_tryon(
+            user_photo_url=user_photo_url,
+            product_photo_urls=product_photo_urls,
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+            tryon_mode=tryon_mode,
+            item_name=product_name
+        )
         if not generation_result.get("success"):
             error_msg = generation_result.get("error", {}).get("message", "Не удалось создать примерку")
             await status_msg.edit_text(f"❌ {error_msg}")
@@ -447,13 +516,12 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
         absolute_path = str(result_path.resolve())
         logger.info(f"Saving try-on result to: {absolute_path}")
         await api_client.update_tryon(tryon_id, "success", absolute_path, generation_time)
-        await state.update_data(last_result_path=absolute_path)
 
         result_photo = FSInputFile(result_path)
         await message.answer_photo(
             photo=result_photo,
             caption=f"Вот как на тебе будет смотреться {product_name}! 💫",
-            reply_markup=get_tryon_result_keyboard(product_id, wb_link, ozon_url, source, category_id, index)
+            reply_markup=get_tryon_result_keyboard(tryon_id, product_id, wb_link, ozon_url, source, category_id, index)
         )
         await status_msg.delete()
     except Exception as e:
@@ -466,37 +534,43 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
 
 # === Сохранение результата и История ===
 
-@router.callback_query(F.data == "tryon:save_result")
+@router.callback_query(F.data.startswith("tryon:save_result:"))
 async def save_tryon_result(callback: CallbackQuery, state: FSMContext):
+    _tryon, _save_result, tryon_id_str = callback.data.split(":")
+    tryon_id = int(tryon_id_str)
     tg_id = callback.from_user.id
 
-    # Получаем последний результат из истории примерок
-    history_result = await api_client.get_tryon_history(tg_id)
-    history = history_result.get("history", []) if history_result else []
+    try:
+        # Получаем всю историю примерок пользователя
+        history_result = await api_client.get_tryon_history(tg_id)
+        history = history_result.get("history", []) if history_result else []
 
-    if history and len(history) > 0:
-        # Берем самую последнюю примерку (первая в списке, так как отсортировано по дате)
-        last_tryon = history[0]
-        result_path = last_tryon.get("result_file_path")
+        # Ищем конкретную примерку по tryon_id
+        current_tryon = next((t for t in history if t["id"] == tryon_id), None)
 
-        logger.info(f"Trying to send result file: {result_path}")
+        if current_tryon:
+            result_path = current_tryon.get("result_file_path")
 
-        # Если путь относительный, преобразуем в абсолютный
-        if result_path and not os.path.isabs(result_path):
-            result_path = str((Path.cwd() / result_path).resolve())
-            logger.info(f"Converted to absolute path: {result_path}")
+            logger.info(f"Trying to send result file for tryon_id {tryon_id}: {result_path}")
 
-        logger.info(f"File exists: {os.path.exists(result_path) if result_path else 'No path'}")
+            # Если путь относительный, преобразуем в абсолютный
+            if result_path and not os.path.isabs(result_path):
+                result_path = str((Path.cwd() / result_path).resolve())
+                logger.info(f"Converted to absolute path: {result_path}")
 
-        if result_path and os.path.exists(result_path):
-            result_file = FSInputFile(result_path)
-            await callback.message.answer_document(document=result_file, caption="Результат примерки сохранен! 📥")
-            await callback.answer("✅ Отправлено!")
+            if result_path and os.path.exists(result_path):
+                result_file = FSInputFile(result_path)
+                await callback.message.answer_document(document=result_file, caption="Результат примерки сохранен! 📥")
+                await callback.answer("✅ Отправлено!")
+            else:
+                logger.error(f"Result file not found for tryon_id {tryon_id}. Path: {result_path}")
+                await callback.answer("❌ Файл результата не найден.", show_alert=True)
         else:
-            logger.error(f"Result file not found. Path: {result_path}, Exists: {os.path.exists(result_path) if result_path else False}")
-            await callback.answer("❌ Файл результата не найден.", show_alert=True)
-    else:
-        await callback.answer("❌ Не удалось найти последний результат примерки.", show_alert=True)
+            logger.warning(f"Try-on record with ID {tryon_id} not found in history for user {tg_id}.")
+            await callback.answer("❌ Не удалось найти результат примерки.", show_alert=True)
+    except Exception as e:
+        logger.error(f"Failed to save try-on result for user {tg_id}, tryon_id {tryon_id}: {e}", exc_info=True)
+        await callback.answer("❌ Произошла ошибка при сохранении результата.", show_alert=True)
 
 
 @router.callback_query(F.data == "my_photos")
@@ -624,9 +698,9 @@ def get_history_navigation_keyboard(index: int, total: int, tryon: dict):
     wb_link = tryon.get('wb_link')
     ozon_url = tryon.get('ozon_url')
     if wb_link:
-        shop_buttons.append(InlineKeyboardButton(text="🔗 Купить на WB", url=wb_link))
+        shop_buttons.append(InlineKeyboardButton(text="Wildberries", url=wb_link))
     if ozon_url:
-        shop_buttons.append(InlineKeyboardButton(text="🔗 Купить на Ozon", url=ozon_url))
+        shop_buttons.append(InlineKeyboardButton(text="Ozon", url=ozon_url))
     
     if shop_buttons:
         buttons.append(shop_buttons)

@@ -62,6 +62,23 @@ def get_product_keyboard(product: Dict, category_id: str, current_index: int,
     marketplace_row = []
     wb_link = product.get('wb_link')
     ozon_link = product.get('ozon_url')
+    logger.info(f"Checking marketplace links. WB: '{wb_link}' (type: {type(wb_link)}), Ozon: '{ozon_link}' (type: {type(ozon_link)})")
+
+    if wb_link and isinstance(wb_link, str) and wb_link.strip():
+        marketplace_row.append(InlineKeyboardButton(
+            text="Wildberries",
+            url=wb_link
+        ))
+    
+    if ozon_link and isinstance(ozon_link, str) and ozon_link.strip():
+        marketplace_row.append(InlineKeyboardButton(
+            text="Ozon",
+            url=ozon_link
+        ))
+    
+    if marketplace_row:
+        buttons.append(marketplace_row)
+
     # 3-й ряд: Примерка
     buttons.append([
         InlineKeyboardButton(

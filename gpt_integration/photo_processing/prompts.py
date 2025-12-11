@@ -114,3 +114,63 @@ REFINEMENT_PROMPT = """Improve this virtual try-on result:
 - Ensure clothing edges blend naturally with the body
 - Remove any artifacts or inconsistencies
 Keep the person, pose, and background unchanged."""
+
+
+# ===== НОВЫЕ ПРОМПТЫ ДЛЯ КОНТРОЛИРУЕМОЙ ПРИМЕРКИ =====
+
+# Промпт для примерки ТОЛЬКО конкретного товара (не весь образ)
+TRYON_SINGLE_ITEM = """Virtual try-on task: Try on ONLY the specific clothing item.
+
+FIRST IMAGE = the person trying on clothes (the customer).
+OTHER IMAGES = reference photos showing the specific item: {item_name}
+
+IMPORTANT! KEEP FROM THE FIRST IMAGE:
+- The person (their face, body type, height, pose, arms, legs, skin tone)
+- The background (keep it exactly as is)
+- The person's OTHER clothing items (shoes, accessories, other garments)
+- The lighting and color scheme
+- The photo quality and style
+
+CHANGE ONLY THIS SPECIFIC ITEM:
+- Replace ONLY the {item_name} on the person
+- Keep all other clothing items that the person is wearing
+- The {item_name} should fit naturally on their body
+- Include realistic fabric folds, draping, and fit
+- The clothing should match the person's pose
+
+DO NOT CHANGE:
+- The person (DO NOT replace them with the model from the clothing photos!)
+- The background (keep the background from the first image!)
+- Other clothing items the person is wearing
+- The pose and body position
+- The person's physical features
+
+Result: same person, same background, same other clothes, but wearing the {item_name} from reference images."""
+
+
+# Промпт для примерки ВСЕГО образа (вся одежда модели)
+TRYON_FULL_OUTFIT = """Virtual try-on task: Try on the COMPLETE outfit from reference.
+
+FIRST IMAGE = the person trying on clothes (the customer).
+OTHER IMAGES = reference photos showing a complete outfit/look.
+
+IMPORTANT! KEEP FROM THE FIRST IMAGE:
+- The person (their face, body type, height, pose, arms, legs, skin tone)
+- The background (keep it exactly as is)
+- The lighting and color scheme
+- The photo quality and style
+
+CHANGE ALL CLOTHING:
+- Put the COMPLETE outfit from other images onto THE PERSON FROM THE FIRST IMAGE
+- Replace ALL clothing items (top, bottom, shoes, accessories visible on model)
+- All clothing should fit naturally on their body
+- Include realistic fabric folds, draping, and fit
+- The clothing should match the person's pose
+
+DO NOT CHANGE:
+- The person (DO NOT replace them with the model from the clothing photos!)
+- The background (keep the background from the first image!)
+- The pose and body position
+- The person's physical features
+
+Result: same person, same background, but wearing the COMPLETE outfit from reference images."""

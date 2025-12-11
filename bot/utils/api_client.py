@@ -4,11 +4,65 @@ HTTP клиент для взаимодействия с FastAPI
 import aiohttp
 import logging
 import os
-from typing import Optional, Dict, List
+import asyncio
+from functools import wraps
+from typing import Optional, Dict, List, Any, Callable, Coroutine
 
 logger = logging.getLogger(__name__)
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
+
+# --- Decorator for Error Handling ---
+
+def _handle_api_exceptions(default_return: Any = None):
+    """
+    Декоратор для обработки исключений при запросах к API.
+    Ловит сетевые ошибки и плохие статусы HTTP.
+    """
+    def decorator(func: Callable[..., Coroutine[Any, Any, Any]]):
+        @wraps(func)
+        async def wrapper(self: "APIClient", *args, **kwargs) -> Any:
+            method_name = func.__name__
+            try:
+                session = await self._get_session()
+                response: Optional[aiohttp.ClientResponse] = await func(self, session, *args, **kwargs)
+
+                # Успешные статусы (2xx)
+                if response and 200 <= response.status < 300:
+                    # Если функция должна вернуть bool, успешный запрос означает True
+                    if func.__annotations__.get('return') == bool:
+                        return True
+                    
+                    if response.content_type == 'application/json':
+                        return await response.json()
+                    
+                    # Для запросов без тела (например, 204 No Content)
+                    if response.status == 204:
+                        return None
+                        
+                    return await response.text()
+
+                # Обработка не-успешных статусов
+                error_body = await response.text() if response else "No response object"
+                status = response.status if response else "N/A"
+                logger.error(
+                    f"API Error in {method_name}: "
+                    f"status={status}, "
+                    f"body='{error_body[:200]}...'"
+                )
+                return default_return
+
+            except aiohttp.ClientError as e:
+                logger.error(f"Network Error in {method_name}: {type(e).__name__} - {e}")
+                return default_return
+            except asyncio.TimeoutError:
+                logger.error(f"Timeout Error in {method_name}")
+                return default_return
+            except Exception as e:
+                logger.error(f"Unexpected Error in {method_name}: {type(e).__name__} - {e}", exc_info=True)
+                return default_return
+        return wrapper
+    return decorator
 
 
 class APIClient:
@@ -21,7 +75,9 @@ class APIClient:
     async def _get_session(self) -> aiohttp.ClientSession:
         """Получить или создать сессию"""
         if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession()
+            # Устанавливаем разумный таймаут для всех запросов
+            timeout = aiohttp.ClientTimeout(total=15)
+            self.session = aiohttp.ClientSession(timeout=timeout)
         return self.session
 
     async def close(self):
@@ -29,361 +85,144 @@ class APIClient:
         if self.session and not self.session.closed:
             await self.session.close()
 
-    # Users endpoints
-    async def register_user(self, tg_id: int, username: Optional[str], first_name: Optional[str]) -> Optional[Dict]:
-        """Регистрация пользователя"""
-        try:
-            session = await self._get_session()
-            async with session.post(
-                f"{self.base_url}/api/users/register",
-                json={"tg_id": tg_id, "username": username, "first_name": first_name}
-            ) as response:
-                if response.status == 200:
-                    return await response.json()
-                logger.error(f"Failed to register user: {response.status}")
-                return None
-        except Exception as e:
-            logger.error(f"Error registering user: {e}")
-            return None
+    # --- Users endpoints ---
 
-    async def get_user_by_tg_id(self, tg_id: int) -> Optional[Dict]:
-        """Получить пользователя по Telegram ID"""
-        try:
-            session = await self._get_session()
-            async with session.get(f"{self.base_url}/api/users/by-tg-id/{tg_id}") as response:
-                if response.status == 200:
-                    return await response.json()
-                return None
-        except Exception as e:
-            logger.error(f"Error getting user: {e}")
-            return None
+    @_handle_api_exceptions(default_return=None)
+    async def register_user(self, session: aiohttp.ClientSession, tg_id: int, username: Optional[str], first_name: Optional[str]) -> Optional[Dict]:
+        return await session.post(
+            f"{self.base_url}/api/users/register",
+            json={"tg_id": tg_id, "username": username, "first_name": first_name}
+        )
 
-    # Measurements endpoints
-    async def save_measurements(self, user_tg_id: int, **measurements) -> Optional[Dict]:
-        """Сохранить параметры пользователя (поддерживает частичное обновление)"""
-        try:
-            session = await self._get_session()
-            async with session.post(
-                f"{self.base_url}/api/measurements/{user_tg_id}",
-                json=measurements
-            ) as response:
-                if response.status == 200:
-                    return await response.json()
-                logger.error(f"Failed to save measurements: {response.status} {await response.text()}")
-                return None
-        except Exception as e:
-            logger.error(f"Error saving measurements: {e}")
-            return None
+    @_handle_api_exceptions(default_return=None)
+    async def get_user_by_tg_id(self, session: aiohttp.ClientSession, tg_id: int) -> Optional[Dict]:
+        return await session.get(f"{self.base_url}/api/users/by-tg-id/{tg_id}")
 
-    async def get_measurements(self, user_tg_id: int) -> Optional[Dict]:
-        """Получить параметры пользователя"""
-        try:
-            session = await self._get_session()
-            async with session.get(f"{self.base_url}/api/measurements/{user_tg_id}") as response:
-                if response.status == 200:
-                    return await response.json()
-                return None
-        except Exception as e:
-            logger.error(f"Error getting measurements: {e}")
-            return None
+    # --- Measurements endpoints ---
 
-    # Favorites endpoints
-    async def add_to_favorites(self, user_id: int, product_id: str) -> Optional[Dict]:
-        """Добавить товар в избранное"""
-        try:
-            session = await self._get_session()
-            async with session.post(
-                f"{self.base_url}/api/favorites/",
-                json={"user_id": user_id, "product_id": product_id}
-            ) as response:
-                if response.status == 200:
-                    return await response.json()
-                logger.error(f"Failed to add to favorites: {response.status}")
-                return None
-        except Exception as e:
-            logger.error(f"Error adding to favorites: {e}")
-            return None
+    @_handle_api_exceptions(default_return=None)
+    async def save_measurements(self, session: aiohttp.ClientSession, user_tg_id: int, **measurements) -> Optional[Dict]:
+        return await session.post(
+            f"{self.base_url}/api/measurements/{user_tg_id}",
+            json=measurements
+        )
 
-    async def remove_from_favorites(self, user_tg_id: int, product_id: str) -> bool:
-        """Удалить товар из избранного"""
-        try:
-            session = await self._get_session()
-            async with session.delete(f"{self.base_url}/api/favorites/{user_tg_id}/{product_id}") as response:
-                return response.status == 200
-        except Exception as e:
-            logger.error(f"Error removing from favorites: {e}")
-            return False
+    @_handle_api_exceptions(default_return=None)
+    async def get_measurements(self, session: aiohttp.ClientSession, user_tg_id: int) -> Optional[Dict]:
+        return await session.get(f"{self.base_url}/api/measurements/{user_tg_id}")
 
-    async def get_favorites(self, user_tg_id: int) -> List[Dict]:
-        """Получить список избранного"""
-        try:
-            session = await self._get_session()
-            async with session.get(f"{self.base_url}/api/favorites/{user_tg_id}") as response:
-                if response.status == 200:
-                    return await response.json()
-                return []
-        except Exception as e:
-            logger.error(f"Error getting favorites: {e}")
-            return []
+    # --- Favorites endpoints ---
 
-    async def check_favorite(self, user_tg_id: int, product_id: str) -> bool:
-        """Проверить, в избранном ли товар"""
-        try:
-            session = await self._get_session()
-            async with session.get(f"{self.base_url}/api/favorites/{user_tg_id}/check/{product_id}") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data.get("is_favorite", False)
-                return False
-        except Exception as e:
-            logger.error(f"Error checking favorite: {e}")
-            return False
+    @_handle_api_exceptions(default_return=None)
+    async def add_to_favorites(self, session: aiohttp.ClientSession, user_id: int, product_id: str) -> Optional[Dict]:
+        return await session.post(
+            f"{self.base_url}/api/favorites/",
+            json={"user_id": user_id, "product_id": product_id}
+        )
 
-    # Catalog endpoints
-    async def get_categories(self) -> List[Dict]:
-        """Получить список категорий"""
-        try:
-            session = await self._get_session()
-            async with session.get(f"{self.base_url}/api/catalog/categories") as response:
-                if response.status == 200:
-                    return await response.json()
-                return []
-        except Exception as e:
-            logger.error(f"Error getting categories: {e}")
-            return []
+    @_handle_api_exceptions(default_return=False)
+    async def remove_from_favorites(self, session: aiohttp.ClientSession, user_tg_id: int, product_id: str) -> bool:
+        return await session.delete(f"{self.base_url}/api/favorites/{user_tg_id}/{product_id}")
 
-    async def get_products_by_category(self, category: str) -> List[Dict]:
-        """Получить товары категории"""
-        try:
-            session = await self._get_session()
-            async with session.get(f"{self.base_url}/api/catalog/products?category={category}") as response:
-                if response.status == 200:
-                    return await response.json()
-                return []
-        except Exception as e:
-            logger.error(f"Error getting products: {e}")
-            return []
+    @_handle_api_exceptions(default_return=[])
+    async def get_favorites(self, session: aiohttp.ClientSession, user_tg_id: int) -> List[Dict]:
+        return await session.get(f"{self.base_url}/api/favorites/{user_tg_id}")
 
-    async def get_product_by_id(self, product_id: str) -> Optional[Dict]:
-        """Получить товар по ID"""
-        try:
-            session = await self._get_session()
-            async with session.get(f"{self.base_url}/api/catalog/products/{product_id}") as response:
-                if response.status == 200:
-                    return await response.json()
-                return None
-        except Exception as e:
-            logger.error(f"Error getting product: {e}")
-            return None
+    @_handle_api_exceptions(default_return=False)
+    async def check_favorite(self, session: aiohttp.ClientSession, user_tg_id: int, product_id: str) -> bool:
+        response = await session.get(f"{self.base_url}/api/favorites/{user_tg_id}/check/{product_id}")
+        data = await response.json()
+        return data.get("is_favorite", False)
 
-    # Size recommendation
-    async def recommend_size(self, user_id: int, product_id: str) -> Optional[Dict]:
-        """Получить рекомендацию размера"""
-        try:
-            session = await self._get_session()
-            async with session.post(
-                f"{self.base_url}/api/size/recommend",
-                json={"user_id": user_id, "product_id": product_id}
-            ) as response:
-                if response.status == 200:
-                    return await response.json()
-                logger.error(f"Failed to get size recommendation: {response.status}")
-                return None
-        except Exception as e:
-            logger.error(f"Error getting size recommendation: {e}")
-            return None
+    # --- Catalog endpoints ---
 
-    # Admin endpoints
-    async def get_admin_stats(self) -> Optional[Dict]:
-        """Получить статистику"""
-        try:
-            session = await self._get_session()
-            async with session.get(f"{self.base_url}/api/admin/stats") as response:
-                if response.status == 200:
-                    return await response.json()
-                return None
-        except Exception as e:
-            logger.error(f"Error getting stats: {e}")
-            return None
+    @_handle_api_exceptions(default_return=[])
+    async def get_categories(self, session: aiohttp.ClientSession) -> List[Dict]:
+        return await session.get(f"{self.base_url}/api/catalog/categories")
 
-    # Try-on endpoints
-    async def check_tryon_limit(self, user_tg_id: int) -> Optional[Dict]:
-        """Проверить лимит примерок"""
-        try:
-            session = await self._get_session()
-            async with session.get(f"{self.base_url}/api/tryon/check-limit/{user_tg_id}") as response:
-                if response.status == 200:
-                    return await response.json()
-                return None
-        except Exception as e:
-            logger.error(f"Error checking try-on limit: {e}")
-            return None
+    @_handle_api_exceptions(default_return=[])
+    async def get_products_by_category(self, session: aiohttp.ClientSession, category: str) -> List[Dict]:
+        return await session.get(f"{self.base_url}/api/catalog/products?category={category}")
 
-    async def get_user_photos(self, user_tg_id: int) -> Optional[Dict]:
-        """Получить фото пользователя"""
-        try:
-            session = await self._get_session()
-            async with session.get(f"{self.base_url}/api/photos/{user_tg_id}") as response:
-                if response.status == 200:
-                    return await response.json()
-                return None
-        except Exception as e:
-            logger.error(f"Error getting user photos: {e}")
-            return None
+    @_handle_api_exceptions(default_return=None)
+    async def get_product_by_id(self, session: aiohttp.ClientSession, product_id: str) -> Optional[Dict]:
+        return await session.get(f"{self.base_url}/api/catalog/products/{product_id}")
 
-    async def upload_photo(self, tg_id: int, file_id: str, file_path: str, consent_given: bool) -> Optional[Dict]:
-        """Загрузить фото"""
-        try:
-            session = await self._get_session()
-            payload = {
-                "user_id": tg_id,
-                "file_id": file_id,
-                "file_path": file_path,
-                "consent_given": consent_given
-            }
-            async with session.post(f"{self.base_url}/api/photos/upload", json=payload) as response:
-                if response.status == 200:
-                    return await response.json()
-                logger.error(f"Failed to upload photo: {response.status} {await response.text()}")
-                return None
-        except Exception as e:
-            logger.error(f"Error uploading photo: {e}")
-            return None
+    # --- Size recommendation ---
 
-    async def delete_photo(self, photo_id: int) -> bool:
-        """Удалить фото"""
-        try:
-            session = await self._get_session()
-            async with session.delete(f"{self.base_url}/api/photos/{photo_id}") as response:
-                return response.status == 200
-        except Exception as e:
-            logger.error(f"Error deleting photo: {e}")
-            return False
+    @_handle_api_exceptions(default_return=None)
+    async def recommend_size(self, session: aiohttp.ClientSession, user_id: int, product_id: str) -> Optional[Dict]:
+        return await session.post(
+            f"{self.base_url}/api/size/recommend",
+            json={"user_id": user_id, "product_id": product_id}
+        )
 
-    async def create_tryon(self, tg_id: int, product_id: str, photo_id: int) -> Optional[Dict]:
-        """Создать запись о примерке"""
-        try:
-            session = await self._get_session()
-            payload = {
-                "user_id": tg_id,
-                "product_id": product_id,
-                "user_photo_id": photo_id
-            }
-            async with session.post(f"{self.base_url}/api/tryon/create", json=payload) as response:
-                if response.status == 200:
-                    return await response.json()
-                logger.error(f"Failed to create try-on: {response.status} {await response.text()}")
-                return None
-        except Exception as e:
-            logger.error(f"Error creating try-on: {e}")
-            return None
+    # --- Admin endpoints ---
+
+    @_handle_api_exceptions(default_return=None)
+    async def get_admin_stats(self, session: aiohttp.ClientSession) -> Optional[Dict]:
+        return await session.get(f"{self.base_url}/api/admin/stats")
+
+    # --- Try-on endpoints ---
+
+    @_handle_api_exceptions(default_return=None)
+    async def check_tryon_limit(self, session: aiohttp.ClientSession, user_tg_id: int) -> Optional[Dict]:
+        return await session.get(f"{self.base_url}/api/tryon/check-limit/{user_tg_id}")
+
+    @_handle_api_exceptions(default_return=None)
+    async def get_user_photos(self, session: aiohttp.ClientSession, user_tg_id: int) -> Optional[Dict]:
+        return await session.get(f"{self.base_url}/api/photos/{user_tg_id}")
+
+    @_handle_api_exceptions(default_return=None)
+    async def upload_photo(self, session: aiohttp.ClientSession, tg_id: int, file_id: str, file_path: str, consent_given: bool) -> Optional[Dict]:
+        payload = {
+            "user_id": tg_id,
+            "file_id": file_id,
+            "file_path": file_path,
+            "consent_given": consent_given
+        }
+        return await session.post(f"{self.base_url}/api/photos/upload", json=payload)
+
+    @_handle_api_exceptions(default_return=False)
+    async def delete_photo(self, session: aiohttp.ClientSession, photo_id: int) -> bool:
+        return await session.delete(f"{self.base_url}/api/photos/{photo_id}")
+
+    @_handle_api_exceptions(default_return=None)
+    async def create_tryon(self, session: aiohttp.ClientSession, tg_id: int, product_id: str, photo_id: int) -> Optional[Dict]:
+        payload = {
+            "user_id": tg_id,
+            "product_id": product_id,
+            "user_photo_id": photo_id
+        }
+        return await session.post(f"{self.base_url}/api/tryon/create", json=payload)
     
-    async def update_tryon(self, tryon_id: int, status: str, result_file_path: Optional[str] = None, generation_time: Optional[int] = None) -> bool:
-        """Обновить запись о примерке"""
-        try:
-            session = await self._get_session()
-            payload = {"status": status}
-            if result_file_path:
-                payload["result_file_path"] = result_file_path
-            if generation_time:
-                payload["generation_time"] = generation_time
-            async with session.put(f"{self.base_url}/api/tryon/{tryon_id}", json=payload) as response:
-                return response.status == 200
-        except Exception as e:
-            logger.error(f"Error updating try-on: {e}")
-            return False
+    @_handle_api_exceptions(default_return=False)
+    async def update_tryon(self, session: aiohttp.ClientSession, tryon_id: int, status: str, result_file_path: Optional[str] = None, generation_time: Optional[int] = None) -> bool:
+        payload = {"status": status}
+        if result_file_path:
+            payload["result_file_path"] = result_file_path
+        if generation_time:
+            payload["generation_time"] = generation_time
+        return await session.put(f"{self.base_url}/api/tryon/{tryon_id}", json=payload)
 
-    async def get_tryon_history(self, user_tg_id: int) -> Optional[Dict]:
-        """Получить историю примерок"""
-        try:
-            session = await self._get_session()
-            async with session.get(f"{self.base_url}/api/tryon/history/{user_tg_id}") as response:
-                if response.status == 200:
-                    return await response.json()
-                return None
-        except Exception as e:
-            logger.error(f"Error getting try-on history: {e}")
-            return None
+    @_handle_api_exceptions(default_return=None)
+    async def get_tryon_history(self, session: aiohttp.ClientSession, user_tg_id: int) -> Optional[Dict]:
+        return await session.get(f"{self.base_url}/api/tryon/history/{user_tg_id}")
 
     async def has_tryon_history(self, user_tg_id: int) -> bool:
         """Проверить, есть ли у пользователя история примерок"""
-        try:
-            history_result = await self.get_tryon_history(user_tg_id)
-            if history_result and "history" in history_result:
-                return len(history_result["history"]) > 0
-            return False
-        except Exception as e:
-            logger.error(f"Error checking try-on history: {e}")
-            return False
+        # Эта функция вызывает другую, уже обернутую, поэтому здесь декоратор не нужен
+        history_result = await self.get_tryon_history(user_tg_id)
+        if history_result and "history" in history_result:
+            return len(history_result["history"]) > 0
+        return False
 
-    async def delete_tryon(self, tryon_id: int) -> bool:
-        """Удалить примерку"""
-        try:
-            session = await self._get_session()
-            async with session.delete(f"{self.base_url}/api/tryon/{tryon_id}") as response:
-                return response.status == 200
-        except Exception as e:
-            logger.error(f"Error deleting try-on: {e}")
-            return False
+    @_handle_api_exceptions(default_return=False)
+    async def delete_tryon(self, session: aiohttp.ClientSession, tryon_id: int) -> bool:
+        return await session.delete(f"{self.base_url}/api/tryon/{tryon_id}")
 
 
 # Singleton instance
 api_client = APIClient()
 
-
-# Вспомогательная функция для простых API запросов
-async def api_request(method: str, endpoint: str, data: Optional[Dict] = None) -> Dict:
-    """
-    Универсальная функция для API запросов
-
-    Args:
-        method: HTTP метод (GET, POST, PUT, DELETE)
-        endpoint: API endpoint (например "/photos/upload")
-        data: Данные для отправки (для POST/PUT)
-
-    Returns:
-        Dict с ответом от API
-    """
-    try:
-        session = await api_client._get_session()
-        url = f"{api_client.base_url}/api{endpoint}"
-
-        if method.upper() == "GET":
-            async with session.get(url) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    logger.error(f"API request failed: {method} {endpoint} - {response.status}")
-                    return {"success": False, "error": f"HTTP {response.status}"}
-
-        elif method.upper() == "POST":
-            async with session.post(url, json=data) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    logger.error(f"API request failed: {method} {endpoint} - {response.status}")
-                    return {"success": False, "error": f"HTTP {response.status}"}
-
-        elif method.upper() == "PUT":
-            async with session.put(url, json=data) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    logger.error(f"API request failed: {method} {endpoint} - {response.status}")
-                    return {"success": False, "error": f"HTTP {response.status}"}
-
-        elif method.upper() == "DELETE":
-            async with session.delete(url) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    logger.error(f"API request failed: {method} {endpoint} - {response.status}")
-                    return {"success": False, "error": f"HTTP {response.status}"}
-
-        else:
-            logger.error(f"Unsupported HTTP method: {method}")
-            return {"success": False, "error": f"Unsupported method: {method}"}
-
-    except Exception as e:
-        logger.error(f"API request error: {method} {endpoint} - {e}")
-        return {"success": False, "error": str(e)}
+# Generic request function is removed as it's better to have explicit client methods

@@ -39,7 +39,7 @@ class ImageGenerationClient:
         api_key: str,
         model: str = "gemini-3-pro-image",
         base_url: str = "https://api.cometapi.com",
-        timeout: float = 180.0,
+        timeout: float = 600.0,
     ):
         self.api_key = api_key
         self.model = model

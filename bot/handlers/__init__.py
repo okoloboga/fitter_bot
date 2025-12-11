@@ -3,13 +3,14 @@
 """
 from aiogram import Router
 
-from . import start, catalog, favorites, measurements, admin, tryon
+from . import start, catalog, favorites, measurements, admin, tryon, onboarding
 
 def register_handlers():
     """Регистрация всех обработчиков"""
     router = Router()
 
     # Порядок важен! Более специфичные обработчики должны быть выше
+    router.include_router(onboarding.router)  # Онбординг первым (FSM states)
     router.include_router(tryon.router)
     router.include_router(measurements.router)
     router.include_router(catalog.router)

@@ -55,75 +55,46 @@ class GPTClient:
     def _get_client(self):
         if self._client is not None:
             return self._client
-        try:
-            # Preferred client (OpenAI SDK v2)
-            from openai import OpenAI  # type: ignore
-            # Disable OpenAI SDK's built-in retries - we handle retries ourselves
-            # This gives us better control over retry logic and error detection
-            self._client = OpenAI(
-                api_key=self.api_key,
-                base_url=self.base_url,
-                max_retries=0,  # Disable SDK retries, we handle them ourselves
-                timeout=self.timeout if self.timeout else 60.0,  # Default 60s timeout
-            )
-            logger.debug(f"Initialized OpenAI client: base_url={self.base_url}, timeout={self.timeout}")
-        except Exception as e:
-            logger.warning(f"Failed to initialize modern OpenAI client: {e}, falling back to legacy client")
-            # Fallback to legacy global client
-            import openai  # type: ignore
-            openai.api_key = self.api_key
-            if self.base_url:
-                try:
-                    # Some forks use api_base instead of base_url
-                    openai.base_url = self.base_url  # type: ignore
-                except Exception:
-                    openai.api_base = self.base_url  # type: ignore
-            self._client = openai
+        
+        from openai import OpenAI
+        
+        # We only support the modern OpenAI client (v1.x+)
+        # Disable the library's built-in retries to use our own custom retry logic
+        self._client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            max_retries=0,  # Disable SDK retries, we handle them ourselves
+            timeout=self.timeout if self.timeout else 60.0,
+        )
+        logger.debug(f"Initialized OpenAI client: base_url={self.base_url}, timeout={self.timeout}")
         return self._client
 
     def _do_completion(self, client, messages: List[Dict[str, str]]) -> str:
-        # Try modern client interface
-        if hasattr(client, "chat") and hasattr(client.chat, "completions"):
-            # Disable OpenAI SDK's built-in retries to have full control
-            # We'll handle retries ourselves with better error detection
-            try:
-                resp = client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens,
-                    timeout=self.timeout,  # Pass timeout if available
-                )
-            except Exception as e:
-                # Re-raise with more context for better error detection
-                logger.debug(f"OpenAI API call failed: {type(e).__name__}: {str(e)}")
-                raise
-            choice = getattr(resp, "choices", [None])[0]
-            if choice is None:
-                return ""
-            message = getattr(choice, "message", None)
-            content = getattr(message, "content", None)
-            if isinstance(content, str):
-                return content
-            # Some clients return dict-like structures
-            if isinstance(message, dict):
-                return message.get("content", "")
+        # We only use the modern client interface
+        try:
+            resp = client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                timeout=self.timeout,
+            )
+        except Exception as e:
+            # Re-raise with more context for better error detection in the retry loop
+            logger.debug(f"OpenAI API call failed: {type(e).__name__}: {str(e)}")
+            raise
+            
+        choice = getattr(resp, "choices", [None])[0]
+        if choice is None:
             return ""
-
-        # Fallback to legacy global API
-        import openai  # type: ignore
-        resp = openai.ChatCompletion.create(
-            model=self.model,
-            messages=messages,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-        )
-        choices = resp.get("choices") if isinstance(resp, dict) else getattr(resp, "choices", [])
-        if not choices:
-            return ""
-        first = choices[0]
-        msg = first.get("message") if isinstance(first, dict) else getattr(first, "message", {})
-        return (msg.get("content") if isinstance(msg, dict) else getattr(msg, "content", "")) or ""
+            
+        message = getattr(choice, "message", None)
+        content = getattr(message, "content", None)
+        
+        if isinstance(content, str):
+            return content
+            
+        return ""
 
     def _is_connection_error(self, error: Exception) -> bool:
         """Check if error is a connection-related error that might be temporary."""

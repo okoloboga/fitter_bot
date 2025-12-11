@@ -15,6 +15,8 @@ from gpt_integration.photo_processing.prompts import (
     TRYON_PROMPT_V4,
     TRYON_PROMPT_V5,
     TRYON_PROMPT_V6,
+    TRYON_SINGLE_ITEM,
+    TRYON_FULL_OUTFIT,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,7 +71,9 @@ async def generate_tryon(
     api_key: str,
     base_url: str = "https://api.cometapi.com",
     model: str = "gemini-2.5-flash-image",
-    timeout: float = 180.0
+    timeout: float = 600.0,
+    tryon_mode: str = "single_item",
+    item_name: str = "одежда"
 ) -> Dict[str, Any]:
     """
     Генерация примерки через Gemini API (CometAPI)
@@ -83,6 +87,10 @@ async def generate_tryon(
             - "gemini-2.5-flash-image" - Nano Banana (быстро)
             - "gemini-3-pro-image" - Nano Banana Pro (дольше, качественнее)
         timeout: Таймаут в секундах
+        tryon_mode: Режим примерки:
+            - "single_item" - примерить ТОЛЬКО конкретный товар
+            - "full_outfit" - примерить ВЕСЬ образ с референса
+        item_name: Название товара (используется в режиме single_item)
 
     Returns:
         Dict с ключами: success, result/error
@@ -97,7 +105,20 @@ async def generate_tryon(
         # Собираем все URL: фото пользователя + фото товара
         all_image_urls = [user_photo_url] + product_urls
 
-        logger.info(f"🎨 Starting try-on generation with {len(all_image_urls)} images")
+        logger.info(f"🎨 Starting try-on generation with {len(all_image_urls)} images (mode: {tryon_mode})")
+
+        # Выбираем промпт в зависимости от режима
+        if tryon_mode == "single_item":
+            # Подставляем название товара в промпт
+            prompt = TRYON_SINGLE_ITEM.format(item_name=item_name)
+            logger.info(f"Using SINGLE_ITEM mode for: {item_name}")
+        elif tryon_mode == "full_outfit":
+            prompt = TRYON_FULL_OUTFIT
+            logger.info("Using FULL_OUTFIT mode")
+        else:
+            # Fallback на старое поведение (используем выбранную версию промпта)
+            prompt = TRYON_PROMPT
+            logger.info(f"Using fallback prompt version: {PROMPT_VERSION}")
 
         # Создаем клиент
         client = ImageGenerationClient(
@@ -108,7 +129,7 @@ async def generate_tryon(
         )
 
         # Генерируем примерку
-        result_data_uri = await client.process_images(all_image_urls, TRYON_PROMPT)
+        result_data_uri = await client.process_images(all_image_urls, prompt)
 
         processing_time = (datetime.now() - start_time).total_seconds()
 
