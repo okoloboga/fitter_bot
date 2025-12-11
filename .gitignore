@@ -1,6 +1,7 @@
 ### Base Rules
 bot/photos/*
 photos/*
+storage/*
 config/*.json
 server/config/*.json
 
