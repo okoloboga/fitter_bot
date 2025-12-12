@@ -175,13 +175,31 @@ class APIClient:
 
     @_handle_api_exceptions(default_return=None)
     async def upload_photo(self, session: aiohttp.ClientSession, tg_id: int, file_id: str, file_path: str, consent_given: bool) -> Optional[Dict]:
-        payload = {
-            "user_id": tg_id,
-            "file_id": file_id,
-            "file_path": file_path,
-            "consent_given": consent_given
-        }
-        return await session.post(f"{self.base_url}/api/photos/upload", json=payload)
+        data = aiohttp.FormData()
+        data.add_field('user_id', str(tg_id))
+        data.add_field('file_id', file_id)
+        data.add_field('consent_given', str(consent_given).lower())
+        
+        try:
+            file_name = os.path.basename(file_path)
+            # Открываем файл для чтения в бинарном режиме
+            # и передаем его в FormData
+            data.add_field('file',
+                           open(file_path, 'rb'),
+                           filename=file_name,
+                           content_type='application/octet-stream')
+        except FileNotFoundError:
+            logger.error(f"File not found at path for upload: {file_path}")
+            return None
+        
+        # Увеличиваем таймаут специально для этого запроса, т.к. загрузка файла может быть долгой
+        timeout = aiohttp.ClientTimeout(total=60)
+        
+        return await session.post(
+            f"{self.base_url}/api/photos/upload",
+            data=data,
+            timeout=timeout
+        )
 
     @_handle_api_exceptions(default_return=False)
     async def delete_photo(self, session: aiohttp.ClientSession, photo_id: int) -> bool:

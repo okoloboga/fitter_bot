@@ -21,6 +21,17 @@ sheets_logger.setLevel(logging.INFO)
 sheets_logger.propagate = True
 
 
+# Custom filter to suppress /health endpoint logs
+class NoHealthCheckFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        # Check if the log message contains the /health endpoint access
+        # Uvicorn access logs usually contain the full request path
+        return "/health" not in record.getMessage()
+
+# Get the uvicorn.access logger and add the filter
+uvicorn_access_logger = logging.getLogger("uvicorn.access")
+uvicorn_access_logger.addFilter(NoHealthCheckFilter())
+
 logger = logging.getLogger(__name__)
 
 

@@ -1,13 +1,14 @@
 """
 API endpoints для работы с фото пользователей и примерками
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete, and_
 from typing import List, Optional
 from datetime import datetime, date
 import os
 import logging
+import uuid
 
 from pydantic import BaseModel
 
@@ -37,24 +38,49 @@ class TryOnStatsResponse(BaseModel):
     success_rate: float
 
 
+# Определяем базовую директорию для хранения фото в контейнере
+USER_PHOTOS_DIR = "/app/storage/user_photos"
+
+
 # === Photo Management ===
 
 @router.post("/photos/upload", response_model=dict)
-async def upload_photo(req: UserPhotoCreate, db: AsyncSession = Depends(get_db)):
+async def upload_photo(
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Form(...),
+    file_id: str = Form(...),
+    consent_given: bool = Form(...),
+    file: UploadFile = File(...)
+):
     """
-    Сохранение фото пользователя в БД
+    Загрузка файла фото и сохранение информации в БД
     """
+    file_path = None
     try:
         # Проверяем пользователя
-        result = await db.execute(select(User).where(User.tg_id == req.user_id))
+        result = await db.execute(select(User).where(User.tg_id == user_id))
         user = result.scalar_one_or_none()
 
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
+        # Создаем директорию пользователя, если ее нет
+        user_dir = os.path.join(USER_PHOTOS_DIR, str(user_id))
+        os.makedirs(user_dir, exist_ok=True)
+        
+        # Генерируем уникальное имя файла, чтобы избежать конфликтов
+        file_extension = os.path.splitext(file.filename)[1]
+        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        file_path = os.path.join(user_dir, unique_filename)
+        
+        # Сохраняем файл
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+
         # Проверяем лимит фото (максимум 3)
         result = await db.execute(
-            select(func.count(UserPhoto.id)).where(UserPhoto.user_id == req.user_id)
+            select(func.count(UserPhoto.id)).where(UserPhoto.user_id == user_id)
         )
         photo_count = result.scalar() or 0
 
@@ -62,25 +88,24 @@ async def upload_photo(req: UserPhotoCreate, db: AsyncSession = Depends(get_db))
             # Удаляем самое старое фото
             result = await db.execute(
                 select(UserPhoto)
-                .where(UserPhoto.user_id == req.user_id)
+                .where(UserPhoto.user_id == user_id)
                 .order_by(UserPhoto.uploaded_at.asc())
                 .limit(1)
             )
             oldest_photo = result.scalar_one_or_none()
 
             if oldest_photo:
-                # Удаляем файл
-                if os.path.exists(oldest_photo.file_path):
+                # Удаляем файл со диска
+                if oldest_photo.file_path and os.path.exists(oldest_photo.file_path):
                     os.remove(oldest_photo.file_path)
                 await db.delete(oldest_photo)
-                await db.commit()
 
         # Создаем новое фото
         new_photo = UserPhoto(
-            user_id=req.user_id,
-            file_id=req.file_id,
-            file_path=req.file_path,
-            consent_given=req.consent_given,
+            user_id=user_id,
+            file_id=file_id,
+            file_path=file_path,
+            consent_given=consent_given,
             is_active=True
         )
 
@@ -99,10 +124,17 @@ async def upload_photo(req: UserPhotoCreate, db: AsyncSession = Depends(get_db))
         }
 
     except HTTPException:
+        await db.rollback()
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
         raise
     except Exception as e:
-        logger.error(f"Failed to upload photo: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        await db.rollback()
+        # Попытаемся удалить сохраненный файл, если что-то пошло не так
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
+        logger.error(f"Failed to upload photo: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error during file upload.")
 
 
 @router.get("/photos/{tg_id}")
