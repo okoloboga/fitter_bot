@@ -133,15 +133,19 @@ IGNORE completely:
 - Accessories (glasses, hats, jewelry, bags, watches, belts, scarves)
 - Shoes
 - Any other clothing items from reference
+- Background from reference photos (DO NOT use it)
 
-KEEP from image 1:
+KEEP EXACTLY from image 1:
 - The person (face, body, pose)
-- Background
+- THE BACKGROUND (keep it exactly as is - do NOT change, mix, or replace with reference background)
+- Lighting and colors of the background
 - Inner clothing (t-shirt, shirt, pants)
+
+CRITICAL: Use ONLY the background from image 1. Never use background from images 2-3.
 
 DO NOT replace the person with the model from reference photos.
 
-Result: same person wearing the {category} instead of their current outerwear."""
+Result: same person, same background, wearing the {category} instead of their current outerwear."""
 
 
 # Промпт для примерки ВСЕГО образа (вся одежда модели)
@@ -154,10 +158,13 @@ WHAT TO DO:
 - Try on ALL clothing from reference images
 - Include ALL visible items (top, bottom, outerwear, accessories if visible)
 
-KEEP from image 1:
+KEEP EXACTLY from image 1:
 - The person (face, body, pose)
-- Background
+- THE BACKGROUND (keep it exactly as is - do NOT change, mix, or replace with reference background)
+- Lighting and colors of the background
+
+CRITICAL: Use ONLY the background from image 1. Never use background from images 2-3.
 
 DO NOT replace the person with the model from reference photos.
 
-Result: same person wearing the complete outfit from reference."""
+Result: same person, same background, wearing the complete outfit from reference."""
