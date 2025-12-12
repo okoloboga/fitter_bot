@@ -126,7 +126,8 @@ Images 2-3 = reference photos of {category}: {item_name}
 
 WHAT TO DO:
 - Try on ONLY the main {category} (the largest garment in reference images)
-- This is outerwear - put it on OVER the person's current clothes
+- REPLACE any existing outerwear (coat, jacket, blazer) with the new {category}
+- Keep inner clothing (t-shirt, shirt) underneath
 
 IGNORE completely:
 - Accessories (glasses, hats, jewelry, bags, watches, belts, scarves)
@@ -136,11 +137,11 @@ IGNORE completely:
 KEEP from image 1:
 - The person (face, body, pose)
 - Background
-- All other clothes the person is wearing
+- Inner clothing (t-shirt, shirt, pants)
 
 DO NOT replace the person with the model from reference photos.
 
-Result: same person wearing the {category}."""
+Result: same person wearing the {category} instead of their current outerwear."""
 
 
 # Промпт для примерки ВСЕГО образа (вся одежда модели)
