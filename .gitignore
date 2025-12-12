@@ -4,6 +4,7 @@ photos/*
 storage/*
 config/*.json
 server/config/*.json
+.claude
 
 config.yaml
 *.exe
