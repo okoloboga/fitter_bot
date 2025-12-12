@@ -17,7 +17,7 @@ Provide brief answers."""
 TRYON_SINGLE_ITEM = """Virtual clothing try-on task:
 
 MAIN IMAGE = Image 1: the person trying on clothes (the customer).
-REFERENCE OTHER IMAGES = Image 2: the clothing item to try on.
+REFERENCE OTHER IMAGES = Image 2: the {category} item to try on.
 
 IMPORTANT! KEEP FROM THE MAIN IMAGE:
 - The person (their face, body type, height, pose, arms, legs, skin tone)

@@ -498,7 +498,7 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
 
         # Determine the prompt for logging
         if tryon_mode == "single_item":
-            prompt_str = TRYON_SINGLE_ITEM.format(item_name=product_name, category=product_category)
+            prompt_str = TRYON_SINGLE_ITEM.format(category=product_category)
         elif tryon_mode == "full_outfit":
             prompt_str = TRYON_FULL_OUTFIT
         else:

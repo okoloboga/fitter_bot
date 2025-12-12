@@ -63,7 +63,7 @@ async def generate_tryon(
         # Выбираем промпт в зависимости от режима
         if tryon_mode == "single_item":
             # Подставляем название товара и категорию в промпт
-            prompt = TRYON_SINGLE_ITEM.format(item_name=item_name, category=category)
+            prompt = TRYON_SINGLE_ITEM.format(category=category)
             logger.info(f"Using SINGLE_ITEM mode for: {category} - {item_name}")
         elif tryon_mode == "full_outfit":
             prompt = TRYON_FULL_OUTFIT
