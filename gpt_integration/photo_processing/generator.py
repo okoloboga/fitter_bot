@@ -9,65 +9,16 @@ from datetime import datetime
 
 from gpt_integration.photo_processing.image_client import ImageGenerationClient
 from gpt_integration.photo_processing.prompts import (
-    TRYON_PROMPT_V1,
-    TRYON_PROMPT_V2,
-    TRYON_PROMPT_V3,
-    TRYON_PROMPT_V4,
-    TRYON_PROMPT_V5,
-    TRYON_PROMPT_V6,
     TRYON_SINGLE_ITEM,
     TRYON_FULL_OUTFIT,
 )
 
 logger = logging.getLogger(__name__)
 
-# Маппинг промптов
-PROMPT_VERSIONS = {
-    "v1": TRYON_PROMPT_V1,  # Основной (по умолчанию)
-    "v2": TRYON_PROMPT_V2,  # Короткий
-    "v3": TRYON_PROMPT_V3,  # С примерами
-    "v4": TRYON_PROMPT_V4,  # Step-by-step
-    "v5": TRYON_PROMPT_V5,  # Технический
-    "v6": TRYON_PROMPT_V6,  # Очень короткий
-}
-
-# Получаем версию промпта из env (по умолчанию v1)
-PROMPT_VERSION = os.getenv("TRYON_PROMPT_VERSION", "v1")
-TRYON_PROMPT = PROMPT_VERSIONS.get(PROMPT_VERSION, TRYON_PROMPT_V1)
-
-logger.info(f"Using try-on prompt version: {PROMPT_VERSION}")
-
-
-# Старый промпт (оставлен для справки)
-TRYON_PROMPT_OLD = """Virtual clothing try-on task:
-
-FIRST IMAGE = the person trying on clothes (the customer).
-OTHER IMAGES = the clothing items to try on.
-
-IMPORTANT! KEEP FROM THE FIRST IMAGE:
-- The person (their face, body type, height, pose, arms, legs, skin tone)
-- The background (keep it exactly as is)
-- The lighting and color scheme
-- The photo quality and style
-
-CHANGE ONLY THE CLOTHING:
-- Put the clothing from other images onto THE PERSON FROM THE FIRST IMAGE
-- The clothing should fit naturally on their body
-- Include realistic fabric folds, draping, and fit
-- The clothing should match the person's pose
-
-DO NOT CHANGE:
-- The person (DO NOT replace them with the model from the clothing photos!)
-- The background (keep the background from the first image!)
-- The pose and body position
-- The person's physical features
-
-Result: same person, same background, new clothing only."""
-
 
 async def generate_tryon(
-    user_photo_url: str,
-    product_photo_urls: List[str],
+    user_photo_source: str,
+    product_photo_sources: List[str],
     api_key: str,
     base_url: str = "https://api.cometapi.com",
     model: str = "gemini-2.5-flash-image",
@@ -80,8 +31,8 @@ async def generate_tryon(
     Генерация примерки через Gemini API (CometAPI)
 
     Args:
-        user_photo_url: URL фото пользователя
-        product_photo_urls: Список URL фото товара (до 2 штук)
+        user_photo_source: URL или локальный путь к фото пользователя
+        product_photo_sources: Список URL или локальных путей к фото товара (до 2 штук)
         api_key: API ключ для CometAPI
         base_url: Base URL API (по умолчанию https://api.cometapi.com)
         model: Модель для генерации:
@@ -102,12 +53,12 @@ async def generate_tryon(
 
     try:
         # Ограничиваем до 2 фото товара (всего 3 с фото пользователя)
-        product_urls = product_photo_urls[:2]
+        product_sources = product_photo_sources[:2]
 
-        # Собираем все URL: фото пользователя + фото товара
-        all_image_urls = [user_photo_url] + product_urls
+        # Собираем все источники: фото пользователя + фото товара
+        all_image_sources = [user_photo_source] + product_sources
 
-        logger.info(f"🎨 Starting try-on generation with {len(all_image_urls)} images (mode: {tryon_mode})")
+        logger.info(f"🎨 Starting try-on generation with {len(all_image_sources)} images (mode: {tryon_mode})")
 
         # Выбираем промпт в зависимости от режима
         if tryon_mode == "single_item":
@@ -118,9 +69,7 @@ async def generate_tryon(
             prompt = TRYON_FULL_OUTFIT
             logger.info("Using FULL_OUTFIT mode")
         else:
-            # Fallback на старое поведение (используем выбранную версию промпта)
-            prompt = TRYON_PROMPT
-            logger.info(f"Using fallback prompt version: {PROMPT_VERSION}")
+            raise ValueError(f"Unsupported tryon_mode: '{tryon_mode}'. Supported modes are 'single_item' and 'full_outfit'.")
 
         # Создаем клиент
         client = ImageGenerationClient(
@@ -131,7 +80,7 @@ async def generate_tryon(
         )
 
         # Генерируем примерку
-        result_data_uri = await client.process_images(all_image_urls, prompt)
+        result_data_uri = await client.process_images(all_image_sources, prompt)
 
         processing_time = (datetime.now() - start_time).total_seconds()
 

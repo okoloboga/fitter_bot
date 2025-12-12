@@ -75,18 +75,44 @@ class ImageGenerationClient:
         """Convert raw base64 to Telegram-ready URI."""
         return f"data:{mime};base64,{b64}"
 
-    async def _download_and_prepare_image(self, image_url: str):
-        """Downloads an image and prepares it for the API."""
-        logger.debug("Downloading source image: %s", image_url)
-        response = await self.client.get(image_url)
-        response.raise_for_status()
-        image_bytes = response.content
+    async def _prepare_image_part(self, image_source: str):
+        """Prepares an image (from URL or local path) for the API."""
+        image_bytes = None
+        mime_type = "image/png" # Default mime type
+
+        if image_source.startswith(("http://", "https://")):
+            logger.debug("Downloading source image from URL: %s", image_source)
+            try:
+                response = await self.client.get(image_source)
+                response.raise_for_status()
+                image_bytes = response.content
+            except httpx.HTTPStatusError as e:
+                logger.error(f"HTTP error downloading image {image_source}: {e}")
+                raise ImageGenerationError(f"Failed to download image from URL: {image_source}") from e
+            except httpx.RequestError as e:
+                logger.error(f"Network error downloading image {image_source}: {e}")
+                raise ImageGenerationError(f"Network error downloading image from URL: {image_source}") from e
+        else:
+            logger.debug("Reading source image from local path: %s", image_source)
+            try:
+                with open(image_source, "rb") as f:
+                    image_bytes = f.read()
+            except FileNotFoundError as e:
+                logger.error(f"Local image file not found: {image_source}")
+                raise ImageGenerationError(f"Local image file not found: {image_source}") from e
+            except Exception as e:
+                logger.error(f"Error reading local image file {image_source}: {e}")
+                raise ImageGenerationError(f"Error reading local image file: {image_source}") from e
+        
+        if not image_bytes:
+            raise ImageGenerationError(f"No image data obtained for source: {image_source}")
 
         try:
+            # Try to determine mime type from image content
             img = Image.open(io.BytesIO(image_bytes))
-            mime_type = Image.MIME.get(img.format, "image/png")
-        except Exception:
-            mime_type = "image/png"
+            mime_type = Image.MIME.get(img.format, mime_type)
+        except Exception as e:
+            logger.warning(f"Could not determine mime type from image content, using default. Error: {e}")
 
         image_b64 = self._encode_image_to_base64(image_bytes)
         logger.debug("Input mime: %s, size: %d bytes", mime_type, len(image_bytes))
@@ -104,7 +130,7 @@ class ImageGenerationClient:
     )
     async def process_images(
         self,
-        image_urls: List[str],
+        image_sources: List[str],
         prompt: str,
     ) -> str:
         """
@@ -118,7 +144,7 @@ class ImageGenerationClient:
 
         # 1. Download and prepare all images concurrently
         image_parts = await asyncio.gather(
-            *[self._download_and_prepare_image(url) for url in image_urls]
+            *[self._prepare_image_part(source) for source in image_sources]
         )
 
         # 2. Build Gemini JSON
@@ -139,7 +165,7 @@ class ImageGenerationClient:
 
         endpoint = f"{self.base_url}/v1beta/models/{self.model}:generateContent"
 
-        logger.debug("Sending request to Gemini model=%s with %d images", self.model, len(image_urls))
+        logger.debug("Sending request to Gemini model=%s with %d images", self.model, len(image_sources))
 
         resp = await self.client.post(endpoint, json=body)
         if resp.status_code >= 400:

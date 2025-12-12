@@ -18,6 +18,8 @@ from bot.states.tryon import TryOnStates
 from bot.utils.api_client import api_client
 from gpt_integration.photo_processing.validator import validate_photo
 from gpt_integration.photo_processing.generator import generate_tryon
+from gpt_integration.photo_processing.prompts import TRYON_SINGLE_ITEM, TRYON_FULL_OUTFIT
+from bot.services.photo_preloader import photo_preloader
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -195,7 +197,6 @@ async def start_tryon(callback: CallbackQuery, state: FSMContext):
             product_category=product_data.get("category", "одежда"),
             wb_link=product_data.get("wb_link"),
             ozon_url=product_data.get("ozon_url"),
-            product_photo_urls=[url for i in [1, 2] if (url := product_data.get(f"photo_{i}_url"))]
         )
         
         # Проверяем лимит примерок
@@ -241,7 +242,6 @@ async def retry_tryon(callback: CallbackQuery, state: FSMContext):
             product_category=product_data.get("category", "одежда"),
             wb_link=product_data.get("wb_link"),
             ozon_url=product_data.get("ozon_url"),
-            product_photo_urls=[url for i in [1, 2] if (url := product_data.get(f"photo_{i}_url"))]
         )
         limit_result = await api_client.check_tryon_limit(tg_id)
         if limit_result and limit_result.get("limit_reached"):
@@ -458,12 +458,18 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
         product_category = fsm_data.get("product_category", "одежда")
         wb_link = fsm_data.get("wb_link", "https://www.wildberries.ru/")
         ozon_url = fsm_data.get("ozon_url")
-        product_photo_urls = fsm_data.get("product_photo_urls", [])
+        product_id_fsm = fsm_data.get("product_id")
         source = fsm_data.get("source", "catalog")
 
+        # Get local path for product photo
+        product_photo_path = photo_preloader.get_photo_path(product_id_fsm, '1') # Assuming '1' is the photo_type for the main product photo
+        product_photo_sources = []
+        if product_photo_path and product_photo_path.exists():
+            product_photo_sources.append(str(product_photo_path))
+
         # Проверка наличия фото товара для примерки
-        if not product_photo_urls:
-            await status_msg.edit_text("❌ К сожалению, для этого товара нельзя сделать примерку, так как отсутствуют эталонные фото.")
+        if not product_photo_sources:
+            await status_msg.edit_text("❌ К сожалению, для этого товара нельзя сделать примерку, так как отсутствует эталонное фото в локальном хранилище.")
             await api_client.update_tryon(tryon_id, status="failed")
             await state.clear()
             return
@@ -485,13 +491,28 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
             await state.clear()
             return
 
-        user_photo_url = await get_telegram_file_url(message.bot, user_photo["file_id"])
+        # Use local file path for user photo
+        user_photo_source = user_photo["file_path"]
         api_key = os.getenv("IMAGE_GEN_API_KEY") or os.getenv("COMET_API_KEY")
         base_url = os.getenv("IMAGE_GEN_BASE_URL", "https://api.cometapi.com")
 
+        # Determine the prompt for logging
+        if tryon_mode == "single_item":
+            prompt_str = TRYON_SINGLE_ITEM.format(item_name=product_name, category=product_category)
+        elif tryon_mode == "full_outfit":
+            prompt_str = TRYON_FULL_OUTFIT
+        else:
+            prompt_str = f"Unsupported tryon_mode: '{tryon_mode}'. This should not happen due to prior validation."
+
+        logger.info(f"""Generating try-on with:
+    Image 1 (User Photo): {user_photo_source}
+    Images 2-3 (Product Photos): {product_photo_sources}
+    Try-on Mode: {tryon_mode}
+    Prompt: {prompt_str}""")
+
         generation_result = await generate_tryon(
-            user_photo_url=user_photo_url,
-            product_photo_urls=product_photo_urls,
+            user_photo_source=user_photo_source,
+            product_photo_sources=product_photo_sources,
             api_key=api_key,
             base_url=base_url,
             model=model,

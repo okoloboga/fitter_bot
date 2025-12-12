@@ -134,6 +134,12 @@ async def onboarding_start_handler(callback: CallbackQuery, state: FSMContext):
 @router.message(OnboardingStates.waiting_russian_size)
 async def russian_size_received(message: Message, state: FSMContext):
     """Получен российский размер"""
+    if not message.text:
+        await message.answer(
+            "❌ Пожалуйста, введи свой размер текстом (например: 42-44 или 44)",
+        )
+        return
+
     russian_size = message.text.strip()
 
     # Валидация размера
