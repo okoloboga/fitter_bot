@@ -119,58 +119,44 @@ Keep the person, pose, and background unchanged."""
 # ===== НОВЫЕ ПРОМПТЫ ДЛЯ КОНТРОЛИРУЕМОЙ ПРИМЕРКИ =====
 
 # Промпт для примерки ТОЛЬКО конкретного товара (не весь образ)
-TRYON_SINGLE_ITEM = """Virtual try-on task: Try on ONLY the specific clothing item.
+TRYON_SINGLE_ITEM = """Virtual try-on: Put the {category} onto the person.
 
-FIRST IMAGE = the person trying on clothes (the customer).
-OTHER IMAGES = reference photos showing the specific item: {item_name}
+Image 1 = customer (the person)
+Images 2-3 = reference photos of {category}: {item_name}
 
-IMPORTANT! KEEP FROM THE FIRST IMAGE:
-- The person (their face, body type, height, pose, arms, legs, skin tone)
-- The background (keep it exactly as is)
-- The person's OTHER clothing items (shoes, accessories, other garments)
-- The lighting and color scheme
-- The photo quality and style
+WHAT TO DO:
+- Try on ONLY the main {category} (the largest garment in reference images)
+- This is outerwear - put it on OVER the person's current clothes
 
-CHANGE ONLY THIS SPECIFIC ITEM:
-- Replace ONLY the {item_name} on the person
-- Keep all other clothing items that the person is wearing
-- The {item_name} should fit naturally on their body
-- Include realistic fabric folds, draping, and fit
-- The clothing should match the person's pose
+IGNORE completely:
+- Accessories (glasses, hats, jewelry, bags, watches, belts, scarves)
+- Shoes
+- Any other clothing items from reference
 
-DO NOT CHANGE:
-- The person (DO NOT replace them with the model from the clothing photos!)
-- The background (keep the background from the first image!)
-- Other clothing items the person is wearing
-- The pose and body position
-- The person's physical features
+KEEP from image 1:
+- The person (face, body, pose)
+- Background
+- All other clothes the person is wearing
 
-Result: same person, same background, same other clothes, but wearing the {item_name} from reference images."""
+DO NOT replace the person with the model from reference photos.
+
+Result: same person wearing the {category}."""
 
 
 # Промпт для примерки ВСЕГО образа (вся одежда модели)
-TRYON_FULL_OUTFIT = """Virtual try-on task: Try on the COMPLETE outfit from reference.
+TRYON_FULL_OUTFIT = """Virtual try-on: Put the COMPLETE outfit onto the person.
 
-FIRST IMAGE = the person trying on clothes (the customer).
-OTHER IMAGES = reference photos showing a complete outfit/look.
+Image 1 = customer (the person)
+Images 2-3 = reference photos showing a complete outfit
 
-IMPORTANT! KEEP FROM THE FIRST IMAGE:
-- The person (their face, body type, height, pose, arms, legs, skin tone)
-- The background (keep it exactly as is)
-- The lighting and color scheme
-- The photo quality and style
+WHAT TO DO:
+- Try on ALL clothing from reference images
+- Include ALL visible items (top, bottom, outerwear, accessories if visible)
 
-CHANGE ALL CLOTHING:
-- Put the COMPLETE outfit from other images onto THE PERSON FROM THE FIRST IMAGE
-- Replace ALL clothing items (top, bottom, shoes, accessories visible on model)
-- All clothing should fit naturally on their body
-- Include realistic fabric folds, draping, and fit
-- The clothing should match the person's pose
+KEEP from image 1:
+- The person (face, body, pose)
+- Background
 
-DO NOT CHANGE:
-- The person (DO NOT replace them with the model from the clothing photos!)
-- The background (keep the background from the first image!)
-- The pose and body position
-- The person's physical features
+DO NOT replace the person with the model from reference photos.
 
-Result: same person, same background, but wearing the COMPLETE outfit from reference images."""
+Result: same person wearing the complete outfit from reference."""

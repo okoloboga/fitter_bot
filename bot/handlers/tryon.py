@@ -192,6 +192,7 @@ async def start_tryon(callback: CallbackQuery, state: FSMContext):
             category_id=category_id,
             index=index,
             product_name=product_data.get("name"),
+            product_category=product_data.get("category", "одежда"),
             wb_link=product_data.get("wb_link"),
             ozon_url=product_data.get("ozon_url"),
             product_photo_urls=[url for i in [1, 2] if (url := product_data.get(f"photo_{i}_url"))]
@@ -237,6 +238,7 @@ async def retry_tryon(callback: CallbackQuery, state: FSMContext):
             category_id=category_id,
             index=index,
             product_name=product_data.get("name"),
+            product_category=product_data.get("category", "одежда"),
             wb_link=product_data.get("wb_link"),
             ozon_url=product_data.get("ozon_url"),
             product_photo_urls=[url for i in [1, 2] if (url := product_data.get(f"photo_{i}_url"))]
@@ -453,6 +455,7 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
     try:
         fsm_data = await state.get_data()
         product_name = fsm_data.get("product_name")
+        product_category = fsm_data.get("product_category", "одежда")
         wb_link = fsm_data.get("wb_link", "https://www.wildberries.ru/")
         ozon_url = fsm_data.get("ozon_url")
         product_photo_urls = fsm_data.get("product_photo_urls", [])
@@ -493,7 +496,8 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
             base_url=base_url,
             model=model,
             tryon_mode=tryon_mode,
-            item_name=product_name
+            item_name=product_name,
+            category=product_category
         )
         if not generation_result.get("success"):
             error_msg = generation_result.get("error", {}).get("message", "Не удалось создать примерку")

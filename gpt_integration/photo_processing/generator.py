@@ -73,7 +73,8 @@ async def generate_tryon(
     model: str = "gemini-2.5-flash-image",
     timeout: float = 600.0,
     tryon_mode: str = "single_item",
-    item_name: str = "одежда"
+    item_name: str = "одежда",
+    category: str = "одежда"
 ) -> Dict[str, Any]:
     """
     Генерация примерки через Gemini API (CometAPI)
@@ -91,6 +92,7 @@ async def generate_tryon(
             - "single_item" - примерить ТОЛЬКО конкретный товар
             - "full_outfit" - примерить ВЕСЬ образ с референса
         item_name: Название товара (используется в режиме single_item)
+        category: Категория товара (например, "ПИДЖАКИ", "ТРЕНЧКОТЫ")
 
     Returns:
         Dict с ключами: success, result/error
@@ -109,9 +111,9 @@ async def generate_tryon(
 
         # Выбираем промпт в зависимости от режима
         if tryon_mode == "single_item":
-            # Подставляем название товара в промпт
-            prompt = TRYON_SINGLE_ITEM.format(item_name=item_name)
-            logger.info(f"Using SINGLE_ITEM mode for: {item_name}")
+            # Подставляем название товара и категорию в промпт
+            prompt = TRYON_SINGLE_ITEM.format(item_name=item_name, category=category)
+            logger.info(f"Using SINGLE_ITEM mode for: {category} - {item_name}")
         elif tryon_mode == "full_outfit":
             prompt = TRYON_FULL_OUTFIT
             logger.info("Using FULL_OUTFIT mode")
