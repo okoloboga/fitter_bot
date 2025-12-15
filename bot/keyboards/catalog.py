@@ -62,7 +62,8 @@ def get_product_keyboard(product: Dict, category_id: str, current_index: int,
     marketplace_row = []
     wb_link = product.get('wb_link')
     ozon_link = product.get('ozon_url')
-    logger.info(f"Checking marketplace links. WB: '{wb_link}' (type: {type(wb_link)}), Ozon: '{ozon_link}' (type: {type(ozon_link)})")
+    shop_url = product.get('shop_url')
+    logger.info(f"Checking marketplace links. WB: '{wb_link}' (type: {type(wb_link)}), Ozon: '{ozon_link}' (type: {type(ozon_link)}), Shop: '{shop_url}' (type: {type(shop_url)})")
 
     if wb_link and isinstance(wb_link, str) and wb_link.strip():
         marketplace_row.append(InlineKeyboardButton(
@@ -74,6 +75,12 @@ def get_product_keyboard(product: Dict, category_id: str, current_index: int,
         marketplace_row.append(InlineKeyboardButton(
             text="Ozon",
             url=ozon_link
+        ))
+
+    if shop_url and isinstance(shop_url, str) and shop_url.strip():
+        marketplace_row.append(InlineKeyboardButton(
+            text="Магазин",
+            url=shop_url
         ))
     
     if marketplace_row:
@@ -153,7 +160,8 @@ def get_favorites_product_keyboard(product: Dict, current_index: int, total_coun
     marketplace_row = []
     wb_link = product.get('wb_link')
     ozon_link = product.get('ozon_url')
-    logger.info(f"Checking marketplace links for favorite. WB: '{wb_link}', Ozon: '{ozon_link}'")
+    shop_url = product.get('shop_url')
+    logger.info(f"Checking marketplace links for favorite. WB: '{wb_link}', Ozon: '{ozon_link}', Shop: '{shop_url}'")
 
     if wb_link and isinstance(wb_link, str) and wb_link.strip():
         marketplace_row.append(InlineKeyboardButton(
@@ -169,6 +177,12 @@ def get_favorites_product_keyboard(product: Dict, current_index: int, total_coun
         ))
     else:
         logger.info("Ozon link is invalid or empty for favorite, skipping button.")
+
+    if shop_url and isinstance(shop_url, str) and shop_url.strip():
+        marketplace_row.append(InlineKeyboardButton(
+            text="Магазин",
+            url=shop_url
+        ))
     
     if marketplace_row:
         buttons.append(marketplace_row)

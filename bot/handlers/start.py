@@ -47,6 +47,11 @@ ABOUT_TEXT = """ℹ️ О боте
 Приятного шопинга! ✨"""
 
 
+PRIMARY_MEASUREMENT_FIELDS = [
+    "russian_size", "height", "chest", "waist", "hips"
+]
+
+
 @router.message(Command("start"), StateFilter("*"))
 async def cmd_start(message: Message, state: FSMContext):
     """Обработчик команды /start - работает из любого состояния"""
@@ -60,15 +65,22 @@ async def cmd_start(message: Message, state: FSMContext):
         first_name=message.from_user.first_name
     )
 
-    # Проверяем, является ли пользователь новым (нет обязательного параметра russian_size)
+    # Проверяем, есть ли у пользователя какие-либо основные параметры
     measurements = await api_client.get_measurements(message.from_user.id)
 
-    # Если параметров нет или нет обязательного russian_size - запускаем онбординг
-    if not measurements or not measurements.get("russian_size"):
+    has_any_primary_measurements = False
+    if measurements:
+        for field in PRIMARY_MEASUREMENT_FIELDS:
+            if measurements.get(field) is not None:
+                has_any_primary_measurements = True
+                break
+
+    if not has_any_primary_measurements:
+        # Если нет ни одного основного параметра, запускаем онбординг
         await start_onboarding(message, state)
         return
 
-    # Для существующих пользователей - показываем главное меню
+    # Для существующих пользователей, у которых есть хотя бы один основной параметр - показываем главное меню
     has_history = await api_client.has_tryon_history(message.from_user.id)
     await message.answer(
         WELCOME_BACK_TEXT,

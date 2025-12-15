@@ -70,6 +70,7 @@ class GoogleSheetsService:
         'Описание': 'description',
         'Размеры': 'available_sizes',
         'OZON': 'ozon_url',
+        'Ссылка': 'shop_url',
         'Фото 1': 'photo_1_url',
         'Фото 2': 'photo_2_url',
         'Фото 3': 'photo_3_url',
@@ -252,6 +253,7 @@ class GoogleSheetsService:
                 if str(mapped_row.get('category', '')).strip() == category_id and is_active:
                     product_id = str(mapped_row['product_id']).strip()
                     ozon_id = mapped_row.get('ozon_url')
+                    shop_url = mapped_row.get('shop_url')
                     products.append({
                         'product_id': product_id,
                         'category': str(mapped_row['category']),
@@ -259,6 +261,7 @@ class GoogleSheetsService:
                         'description': mapped_row['description'],
                         'wb_link': f"https://www.wildberries.ru/catalog/{product_id}/detail.aspx",
                         'ozon_url': f"https://www.ozon.ru/product/pidzhak-slavalook-brand-{ozon_id}" if ozon_id else None,
+                        'shop_url': shop_url.strip() if shop_url and isinstance(shop_url, str) else None,
                         'available_sizes': mapped_row['available_sizes'],
                         'collage_url': convert_google_drive_url(mapped_row['collage_url']),
                         'photo_1_url': convert_google_drive_url(mapped_row['photo_1_url']),
@@ -324,6 +327,7 @@ class GoogleSheetsService:
                     is_active = str(mapped_row.get('is_active', 'ДА')).upper() in ['ДА', 'TRUE', 'YES', '1']
                     prod_id = sheet_product_id
                     ozon_id = mapped_row.get('ozon_url')
+                    shop_url = mapped_row.get('shop_url')
 
                     product = {
                         'product_id': prod_id,
@@ -332,6 +336,7 @@ class GoogleSheetsService:
                         'description': mapped_row['description'],
                         'wb_link': f"https://www.wildberries.ru/catalog/{prod_id}/detail.aspx",
                         'ozon_url': f"https://www.ozon.ru/product/pidzhak-slavalook-brand-{ozon_id}" if ozon_id else None,
+                        'shop_url': shop_url.strip() if shop_url and isinstance(shop_url, str) else None,
                         'available_sizes': mapped_row['available_sizes'],
                         'collage_url': convert_google_drive_url(mapped_row['collage_url']),
                         'photo_1_url': convert_google_drive_url(mapped_row['photo_1_url']),
