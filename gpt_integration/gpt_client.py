@@ -23,9 +23,9 @@ class GPTClient:
         system_prompt: Optional[str] = None,
     ) -> None:
         # Resolve from environment if not provided
-        self.api_key = api_key or os.getenv("COMETAPI_API_KEY") or ""
-        self.base_url = (base_url or os.getenv("COMETAPI_BASE_URL") or "https://api.cometapi.com").strip()
-        self.model = model or os.getenv("COMETAPI_CHAT_MODEL") or "gpt-4.1"
+        self.api_key = api_key or os.getenv("COMET_API_KEY") or ""
+        self.base_url = (base_url or os.getenv("COMET_BASE_URL") or "https://api.cometapi.com").strip()
+        self.model = model or os.getenv("COMET_CHAT_MODEL") or "gpt-4.1"
         self.temperature = float(os.getenv("OPENAI_TEMPERATURE", str(temperature)))
         self.max_tokens = int(os.getenv("OPENAI_MAX_TOKENS", str(max_tokens)))
         self.timeout = float(os.getenv("OPENAI_TIMEOUT", str(timeout)))
@@ -37,7 +37,7 @@ class GPTClient:
         self.retry_backoff = float(os.getenv("OPENAI_RETRY_BACKOFF", "2"))
 
         if not self.api_key:
-            raise ValueError("COMETAPI_API_KEY is not configured")
+            raise ValueError("COMET_API_KEY is not configured")
 
     @classmethod
     def from_env(cls) -> "GPTClient":
