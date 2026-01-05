@@ -55,7 +55,7 @@ async def validate_photo(image_url: str) -> Dict[str, Any]:
             }
         ]
 
-        response = client.complete_messages(messages)
+        response = await client.complete_messages(messages)
 
         # Парсим JSON из ответа
         if response.startswith("ERROR"):
