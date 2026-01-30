@@ -26,7 +26,11 @@ async def download_telegram_photo(file_url: str) -> bytes:
 
 class ImageGenerationClient:
     """
-    Gemini 2.5 Flash Image / Gemini 3 Pro Image via CometAPI.
+    Клиент для генерации изображений через CometAPI.
+    
+    Поддерживает модели:
+    - Gemini 2.5 Flash Image / Gemini 3 Pro Image
+    - GPT Image -1 / GPT Image 1.5 (и другие модели через CometAPI)
 
     Поддерживает:
     - image→image
@@ -136,7 +140,7 @@ class ImageGenerationClient:
         """
         image-to-image with multiple inputs:
         - скачивает картинки
-        - отправляет в Gemini generateContent
+        - отправляет запрос в CometAPI generateContent
         - парсит camelCase & snake_case
         - возвращает data:image/png;base64,...
         """
@@ -147,7 +151,7 @@ class ImageGenerationClient:
             *[self._prepare_image_part(source) for source in image_sources]
         )
 
-        # 2. Build Gemini JSON
+        # 2. Build request JSON
         parts = [{"text": prompt}]
         parts.extend(image_parts)
 
@@ -163,24 +167,70 @@ class ImageGenerationClient:
             }
         }
 
-        endpoint = f"{self.base_url}/v1beta/models/{self.model}:generateContent"
+        # Определяем endpoint в зависимости от типа модели
+        # ВАЖНО: Для GPT Image моделей может использоваться другой endpoint и формат запроса
+        # Если все endpoint'ы не работают, возможно нужен другой формат body для этих моделей
+        if "gpt" in self.model.lower() or "openai" in self.model.lower():
+            # Пробуем альтернативные endpoint'ы для GPT Image моделей
+            # Порядок важен - пробуем сначала стандартный, потом альтернативные
+            endpoints_to_try = [
+                f"{self.base_url}/v1beta/models/{self.model}:generateContent",  # Стандартный Gemini endpoint
+                f"{self.base_url}/v1/images/generations",  # Возможный OpenAI-совместимый endpoint (может требовать другой формат body)
+                f"{self.base_url}/v1/chat/completions",  # Chat completions endpoint (может требовать другой формат body)
+            ]
+            logger.info("GPT Image model detected, will try multiple endpoints: %s", endpoints_to_try)
+        else:
+            # Для Gemini моделей используем стандартный endpoint
+            endpoints_to_try = [f"{self.base_url}/v1beta/models/{self.model}:generateContent"]
 
-        logger.debug("Sending request to Gemini model=%s with %d images", self.model, len(image_sources))
-
-        resp = await self.client.post(endpoint, json=body)
+        resp = None
+        last_error = None
+        
+        for endpoint in endpoints_to_try:
+            try:
+                logger.info("Trying endpoint: %s, model=%s with %d images", endpoint, self.model, len(image_sources))
+                resp = await self.client.post(endpoint, json=body)
+                
+                if resp.status_code < 400:
+                    logger.info("✅ Success with endpoint: %s", endpoint)
+                    break
+                elif resp.status_code == 404:
+                    logger.warning("404 error with endpoint: %s, trying next...", endpoint)
+                    continue
+                else:
+                    # Другие ошибки (400, 500 и т.д.) - логируем и пробуем следующий endpoint
+                    error_text = resp.text[:500]  # Ограничиваем длину для логов
+                    logger.warning("Error %s with endpoint %s: %s", resp.status_code, endpoint, error_text)
+                    continue
+            except (httpx.RemoteProtocolError, httpx.ConnectError, httpx.TimeoutException) as e:
+                logger.warning("Connection error with endpoint %s: %s, trying next...", endpoint, type(e).__name__)
+                last_error = e
+                continue
+            except Exception as e:
+                logger.warning("Unexpected error with endpoint %s: %s, trying next...", endpoint, e)
+                last_error = e
+                continue
+        
+        if resp is None:
+            error_msg = f"All endpoints failed for model {self.model}. Tried: {endpoints_to_try}"
+            if last_error:
+                error_msg += f". Last error: {type(last_error).__name__}: {last_error}"
+            logger.error("❌ %s", error_msg)
+            raise ImageGenerationError(error_msg) from last_error
+        
         if resp.status_code >= 400:
-            error_text = resp.text
-            logger.error("Gemini API error %s: %s", resp.status_code, error_text)
+            error_text = resp.text[:500] if resp.text else "No error message"
+            logger.error("API error %s for model %s at endpoint %s: %s", resp.status_code, self.model, endpoint, error_text)
             resp.raise_for_status()
 
         data = resp.json()
-        logger.debug("Raw Gemini response received successfully")
+        logger.debug("Raw API response received successfully for model %s", self.model)
 
-        # 3. Parse Gemini response (camelCase)
+        # 3. Parse API response (camelCase)
         try:
             candidates = data.get("candidates") or []
             if not candidates:
-                raise ImageGenerationError("Gemini returned no candidates")
+                raise ImageGenerationError(f"API returned no candidates for model {self.model}")
 
             candidate = candidates[0]
             content = candidate.get("content") or {}
@@ -199,7 +249,7 @@ class ImageGenerationClient:
 
             if not output_b64:
                 raise ImageGenerationError(
-                    f"No image returned by Gemini. Response: {data}"
+                    f"No image returned by API for model {self.model}. Response: {data}"
                 )
 
         except Exception as e:
@@ -207,7 +257,7 @@ class ImageGenerationClient:
             raise ImageGenerationError(f"Failed to parse Gemini response: {e}")
 
         elapsed = time.monotonic() - start
-        logger.info("Gemini execution time: %.2fs", elapsed)
+        logger.info("Image generation execution time for model %s: %.2fs", self.model, elapsed)
 
         # 4. Prepare final Telegram-ready data:image/...;base64,...
         return self._to_telegram_data_uri(output_mime, output_b64)

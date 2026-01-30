@@ -109,6 +109,8 @@ def get_model_selection_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⚡️ Быстрая (~1-2 мин)", callback_data="tryon:model:fast")],
         [InlineKeyboardButton(text="👑 Качественная (~3-4 мин)", callback_data="tryon:model:pro")],
+        [InlineKeyboardButton(text="🎨 GPT Image -1 (~X мин)", callback_data="tryon:model:gpt-image-1")],
+        [InlineKeyboardButton(text="🚀 GPT Image 1.5 (~X мин)", callback_data="tryon:model:gpt-image-1.5")],
         [InlineKeyboardButton(text="◀️ Отмена", callback_data="tryon:cancel")]
     ])
 
@@ -202,7 +204,7 @@ async def start_tryon(callback: CallbackQuery, state: FSMContext):
         # Проверяем лимит примерок
         limit_result = await api_client.check_tryon_limit(tg_id)
         if limit_result and limit_result.get("limit_reached"):
-            await callback.answer(f"Ты достиг лимита примерок на сегодня ({limit_result.get('count', 10)}/10). Попробуй завтра! 😊", show_alert=True)
+            await callback.answer(f"Ты достиг лимита примерок на сегодня ({limit_result.get('count', 20)}/20). Попробуй завтра! 😊", show_alert=True)
             return
 
         # Сразу запрашиваем режим примерки
@@ -245,7 +247,7 @@ async def retry_tryon(callback: CallbackQuery, state: FSMContext):
         )
         limit_result = await api_client.check_tryon_limit(tg_id)
         if limit_result and limit_result.get("limit_reached"):
-            await callback.answer(f"Ты достиг лимита примерок на сегодня ({limit_result.get('count', 10)}/10). Попробуй завтра! 😊", show_alert=True)
+            await callback.answer(f"Ты достиг лимита примерок на сегодня ({limit_result.get('count', 20)}/20). Попробуй завтра! 😊", show_alert=True)
             return
 
         photos_result = await api_client.get_user_photos(tg_id)
@@ -384,8 +386,35 @@ async def photo_selected(callback: CallbackQuery, state: FSMContext):
 async def model_selected(callback: CallbackQuery, state: FSMContext):
     """Обработка выбора модели - запуск генерации"""
     model_type = callback.data.split(":")[2]
-    model = "gemini-2.5-flash-image" if model_type == "fast" else "gemini-3-pro-image"
-    model_name = "Быстрая" if model_type == "fast" else "Качественная"
+    
+    # Маппинг типов моделей на их API названия и отображаемые имена
+    # Доступные модели:
+    # - fast: gemini-2.5-flash-image (быстрая генерация, ~1-2 мин)
+    # - pro: gemini-3-pro-image (качественная генерация, ~3-4 мин)
+    # - gpt-image-1: GPT Image -1 (альтернативная модель, ~X мин)
+    # - gpt-image-1.5: GPT Image 1.5 (альтернативная модель, ~X мин)
+    # 
+    # Можно переопределить названия через переменные окружения:
+    # GPT_IMAGE_1_MODEL, GPT_IMAGE_1_5_MODEL
+    model_mapping = {
+        "fast": ("gemini-2.5-flash-image", "Быстрая"),
+        "pro": ("gemini-3-pro-image", "Качественная"),
+        "gpt-image-1": (
+            os.getenv("GPT_IMAGE_1_MODEL", "gpt-4-image-1"),  # Пробуем gpt-4-image-1 вместо gpt-image-1
+            "GPT Image -1"
+        ),
+        "gpt-image-1.5": (
+            os.getenv("GPT_IMAGE_1_5_MODEL", "gpt-4-image-1.5"),  # Пробуем gpt-4-image-1.5 вместо gpt-image-1.5
+            "GPT Image 1.5"
+        )
+    }
+    
+    if model_type not in model_mapping:
+        await callback.answer("❌ Неизвестная модель", show_alert=True)
+        await state.clear()
+        return
+    
+    model, model_name = model_mapping[model_type]
 
     # Сохраняем выбранную модель в state
     await state.update_data(model=model, model_name=model_name)
@@ -449,7 +478,14 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
         return
 
     tryon_id = tryon_create_result["tryon_id"]
-    time_estimate = "1-2 минуты" if model == "gemini-2.5-flash-image" else "3-4 минуты"
+    # Маппинг времени генерации для разных моделей
+    time_mapping = {
+        "gemini-2.5-flash-image": "1-2 минуты",
+        "gemini-3-pro-image": "3-4 минуты",
+        "gpt-image-1": "2-3 минуты",  # TODO: Уточнить после тестирования
+        "gpt-image-1.5": "3-4 минуты"  # TODO: Уточнить после тестирования
+    }
+    time_estimate = time_mapping.get(model, "2-3 минуты")
     status_msg = await message.answer(f"🎨 Создаем твою примерку с помощью {model_name} модели...\nЭто займет около {time_estimate} ⏳")
 
     try:
