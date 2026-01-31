@@ -5,8 +5,10 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.exceptions import TelegramNetworkError, TelegramAPIError
 import logging
 import os
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from PIL import Image
@@ -23,6 +25,46 @@ from bot.services.photo_preloader import photo_preloader
 
 router = Router()
 logger = logging.getLogger(__name__)
+
+
+async def safe_edit_message(message_or_callback, text: str, max_retries: int = 3):
+    """
+    Безопасное редактирование сообщения с обработкой сетевых ошибок.
+    
+    Args:
+        message_or_callback: Message или CallbackQuery объект
+        text: Текст для отправки
+        max_retries: Максимальное количество попыток
+    """
+    if hasattr(message_or_callback, 'edit_text'):
+        msg = message_or_callback
+    elif hasattr(message_or_callback, 'message'):
+        msg = message_or_callback.message
+    else:
+        logger.warning("Cannot determine message object for safe_edit_message")
+        return
+    
+    for attempt in range(max_retries):
+        try:
+            await msg.edit_text(text)
+            return
+        except (TelegramNetworkError, TelegramAPIError) as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Network error editing message (attempt {attempt + 1}/{max_retries}): {e}")
+                await asyncio.sleep(1)  # Небольшая задержка перед повтором
+            else:
+                logger.error(f"Failed to edit message after {max_retries} attempts: {e}")
+                # Пробуем отправить новое сообщение вместо редактирования
+                try:
+                    if hasattr(msg, 'answer'):
+                        await msg.answer(text)
+                    elif hasattr(message_or_callback, 'message') and hasattr(message_or_callback.message, 'answer'):
+                        await message_or_callback.message.answer(text)
+                except Exception as e2:
+                    logger.error(f"Failed to send new message as fallback: {e2}")
+        except Exception as e:
+            logger.error(f"Unexpected error editing message: {e}", exc_info=True)
+            break
 
 STORAGE_PATH = Path(os.getenv("STORAGE_PATH", "storage"))
 USER_PHOTOS_PATH = STORAGE_PATH / "user_photos"
@@ -106,13 +148,16 @@ def get_photo_selection_keyboard(photos: list):
 
 def get_model_selection_keyboard():
     """Клавиатура выбора модели генерации"""
-    return InlineKeyboardMarkup(inline_keyboard=[
+    # Временно скрыты GPT Image модели, так как они недоступны в CometAPI
+    # Раскомментируйте, когда модели будут доступны
+    keyboard = [
         [InlineKeyboardButton(text="⚡️ Быстрая (~1-2 мин)", callback_data="tryon:model:fast")],
         [InlineKeyboardButton(text="👑 Качественная (~3-4 мин)", callback_data="tryon:model:pro")],
-        [InlineKeyboardButton(text="🎨 GPT Image -1 (~X мин)", callback_data="tryon:model:gpt-image-1")],
-        [InlineKeyboardButton(text="🚀 GPT Image 1.5 (~X мин)", callback_data="tryon:model:gpt-image-1.5")],
+        # [InlineKeyboardButton(text="🎨 GPT Image -1 (~X мин)", callback_data="tryon:model:gpt-image-1")],
+        # [InlineKeyboardButton(text="🚀 GPT Image 1.5 (~X мин)", callback_data="tryon:model:gpt-image-1.5")],
         [InlineKeyboardButton(text="◀️ Отмена", callback_data="tryon:cancel")]
-    ])
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_tryon_mode_keyboard():
@@ -400,11 +445,11 @@ async def model_selected(callback: CallbackQuery, state: FSMContext):
         "fast": ("gemini-2.5-flash-image", "Быстрая"),
         "pro": ("gemini-3-pro-image", "Качественная"),
         "gpt-image-1": (
-            os.getenv("GPT_IMAGE_1_MODEL", "gpt-4-image-1"),  # Пробуем gpt-4-image-1 вместо gpt-image-1
+            os.getenv("GPT_IMAGE_1_MODEL", "gpt-image-1"),  # Пробуем разные варианты: gpt-image-1, gpt-4-image-1
             "GPT Image -1"
         ),
         "gpt-image-1.5": (
-            os.getenv("GPT_IMAGE_1_5_MODEL", "gpt-4-image-1.5"),  # Пробуем gpt-4-image-1.5 вместо gpt-image-1.5
+            os.getenv("GPT_IMAGE_1_5_MODEL", "gpt-image-1.5"),  # Пробуем разные варианты: gpt-image-1.5, gpt-4-image-1.5
             "GPT Image 1.5"
         )
     }
@@ -505,7 +550,7 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
 
         # Проверка наличия фото товара для примерки
         if not product_photo_sources:
-            await status_msg.edit_text("❌ К сожалению, для этого товара нельзя сделать примерку, так как отсутствует эталонное фото в локальном хранилище.")
+            await safe_edit_message(status_msg, "❌ К сожалению, для этого товара нельзя сделать примерку, так как отсутствует эталонное фото в локальном хранилище.")
             await api_client.update_tryon(tryon_id, status="failed")
             await state.clear()
             return
@@ -514,7 +559,7 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
         index = fsm_data.get("index", 0)
 
         if not product_name:
-            await status_msg.edit_text("❌ Ошибка: данные о товаре (название) не найдены в сессии.")
+            await safe_edit_message(status_msg, "❌ Ошибка: данные о товаре (название) не найдены в сессии.")
             await api_client.update_tryon(tryon_id, status="failed")
             await state.clear()
             return
@@ -522,7 +567,7 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
         photos_result = await api_client.get_user_photos(tg_id)
         user_photo = next((p for p in photos_result.get("photos", []) if p["id"] == photo_id), None) if photos_result else None
         if not user_photo:
-            await status_msg.edit_text("❌ Фото не найдено")
+            await safe_edit_message(status_msg, "❌ Фото не найдено")
             await api_client.update_tryon(tryon_id, status="failed")
             await state.clear()
             return
@@ -558,7 +603,7 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
         )
         if not generation_result.get("success"):
             error_msg = generation_result.get("error", {}).get("message", "Не удалось создать примерку")
-            await status_msg.edit_text(f"❌ {error_msg}")
+            await safe_edit_message(status_msg, f"❌ {error_msg}")
             await api_client.update_tryon(tryon_id, status="failed")
             await state.clear()
             return
@@ -587,8 +632,11 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
         await status_msg.delete()
     except Exception as e:
         logger.error(f"Failed to generate try-on: {e}", exc_info=True)
-        await status_msg.edit_text("❌ Ошибка генерации примерки")
-        await api_client.update_tryon(tryon_id, status="failed")
+        await safe_edit_message(status_msg, "❌ Ошибка генерации примерки")
+        try:
+            await api_client.update_tryon(tryon_id, status="failed")
+        except Exception as e2:
+            logger.error(f"Failed to update tryon status: {e2}")
     finally:
         await state.clear()
 

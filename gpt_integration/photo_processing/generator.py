@@ -108,17 +108,18 @@ async def generate_tryon(
     except Exception as e:
         processing_time = (datetime.now() - start_time).total_seconds()
         logger.error(f"❌ Try-on generation failed after {processing_time:.2f}s: {e}", exc_info=True)
+        logger.error(f"Model used: {model}, Base URL: {base_url}")
 
         error_str = str(e).lower()
         if "timeout" in error_str:
             error_type = "timeout"
             message = "Превышено время ожидания генерации"
-        elif "404" in error_str or "not found" in error_str:
+        elif "404" in error_str or "not found" in error_str or "no available channel" in error_str or "model_not_found" in error_str:
             error_type = "model_not_found"
-            message = f"Модель '{model}' недоступна. Возможно, она не поддерживается в вашем тарифе CometAPI или название модели неверное."
-        elif "remoteprotocol" in error_str or "server disconnected" in error_str or "all endpoints failed" in error_str:
+            message = f"Модель '{model}' недоступна. Возможно, она не поддерживается в вашем тарифе CometAPI или название модели неверное. Попробуйте использовать модель 'Быстрая' или 'Качественная'."
+        elif "remoteprotocol" in error_str or "server disconnected" in error_str or "all endpoints failed" in error_str or "connecterror" in error_str:
             error_type = "model_not_supported"
-            message = f"Модель '{model}' не поддерживается или использует другой формат запроса. Попробуйте другую модель (Быстрая или Качественная)."
+            message = f"Модель '{model}' недоступна в CometAPI. Возможно, она не поддерживается или недоступна в вашем тарифе. Попробуйте использовать модель 'Быстрая' или 'Качественная'."
         elif "api" in error_str or "network" in error_str or "http" in error_str:
             error_type = "api_error"
             message = "Ошибка при обращении к сервису генерации"

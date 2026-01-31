@@ -50,6 +50,8 @@ class ImageGenerationClient:
         self.base_url = base_url
         self.timeout = timeout
 
+        # Для прокси-сервисов (CometAPI) формат авторизации может отличаться от стандартного OpenAI
+        # Прокси-сервис сам преобразует заголовки при перенаправлении в OpenAI
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(timeout),
             headers={
@@ -79,8 +81,13 @@ class ImageGenerationClient:
         """Convert raw base64 to Telegram-ready URI."""
         return f"data:{mime};base64,{b64}"
 
-    async def _prepare_image_part(self, image_source: str):
-        """Prepares an image (from URL or local path) for the API."""
+    async def _prepare_image_part(self, image_source: str, for_openai: bool = False):
+        """Prepares an image (from URL or local path) for the API.
+        
+        Args:
+            image_source: URL or local path to image
+            for_openai: If True, returns OpenAI format (image_url), else Gemini format (inline_data)
+        """
         image_bytes = None
         mime_type = "image/png" # Default mime type
 
@@ -121,12 +128,22 @@ class ImageGenerationClient:
         image_b64 = self._encode_image_to_base64(image_bytes)
         logger.debug("Input mime: %s, size: %d bytes", mime_type, len(image_bytes))
         
-        return {
-            "inline_data": {
-                "mime_type": mime_type,
-                "data": image_b64
+        if for_openai:
+            # OpenAI format: data URI with mime type
+            return {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{mime_type};base64,{image_b64}"
+                }
             }
-        }
+        else:
+            # Gemini format
+            return {
+                "inline_data": {
+                    "mime_type": mime_type,
+                    "data": image_b64
+                }
+            }
 
     @retry(
         wait=wait_random_exponential(multiplier=1, max=30),
@@ -140,18 +157,37 @@ class ImageGenerationClient:
         """
         image-to-image with multiple inputs:
         - скачивает картинки
-        - отправляет запрос в CometAPI generateContent
-        - парсит camelCase & snake_case
+        - отправляет запрос в CometAPI/OpenAI API
+        - Для Gemini моделей: использует формат Gemini API (generateContent)
+        - Для GPT Image моделей: использует формат OpenAI API (chat completions с vision)
+        - парсит ответ в зависимости от формата API
         - возвращает data:image/png;base64,...
         """
         start = time.monotonic()
 
+        # Определяем, используем ли мы GPT Image модели
+        # ВАЖНО: CometAPI использует формат Gemini API для всех моделей, включая GPT Image
+        # Прокси-сервис сам преобразует запросы в формат OpenAI при необходимости
+        # Поэтому is_gpt_image используется только для логирования
+        model_lower = self.model.lower()
+        is_gpt_image = (
+            "gpt" in model_lower or 
+            "openai" in model_lower
+        ) and "gemini" not in model_lower  # Исключаем Gemini модели
+        
+        logger.info("Model: %s, is_gpt_image: %s (model_lower: %s)", self.model, is_gpt_image, model_lower)
+        
         # 1. Download and prepare all images concurrently
+        # ВАЖНО: CometAPI использует формат Gemini API для всех моделей, включая GPT Image
+        # Поэтому всегда используем формат Gemini (for_openai=False)
         image_parts = await asyncio.gather(
-            *[self._prepare_image_part(source) for source in image_sources]
+            *[self._prepare_image_part(source, for_openai=False) for source in image_sources]
         )
 
-        # 2. Build request JSON
+        # 2. Build request JSON в зависимости от типа модели
+        # ВАЖНО: CometAPI использует тот же формат Gemini API для всех моделей, включая GPT Image
+        # Прокси-сервис сам преобразует запросы в формат OpenAI при необходимости
+        # Поэтому используем формат Gemini API для всех моделей через CometAPI
         parts = [{"text": prompt}]
         parts.extend(image_parts)
 
@@ -166,22 +202,13 @@ class ImageGenerationClient:
                 "responseModalities": ["TEXT", "IMAGE"]
             }
         }
-
-        # Определяем endpoint в зависимости от типа модели
-        # ВАЖНО: Для GPT Image моделей может использоваться другой endpoint и формат запроса
-        # Если все endpoint'ы не работают, возможно нужен другой формат body для этих моделей
-        if "gpt" in self.model.lower() or "openai" in self.model.lower():
-            # Пробуем альтернативные endpoint'ы для GPT Image моделей
-            # Порядок важен - пробуем сначала стандартный, потом альтернативные
-            endpoints_to_try = [
-                f"{self.base_url}/v1beta/models/{self.model}:generateContent",  # Стандартный Gemini endpoint
-                f"{self.base_url}/v1/images/generations",  # Возможный OpenAI-совместимый endpoint (может требовать другой формат body)
-                f"{self.base_url}/v1/chat/completions",  # Chat completions endpoint (может требовать другой формат body)
-            ]
-            logger.info("GPT Image model detected, will try multiple endpoints: %s", endpoints_to_try)
+        endpoint = f"{self.base_url}/v1beta/models/{self.model}:generateContent"
+        endpoints_to_try = [endpoint]
+        
+        if is_gpt_image:
+            logger.info("Using Gemini API format for GPT Image model via CometAPI: %s (image-to-image with %d images)", self.model, len(image_sources))
         else:
-            # Для Gemini моделей используем стандартный endpoint
-            endpoints_to_try = [f"{self.base_url}/v1beta/models/{self.model}:generateContent"]
+            logger.info("Using Gemini format for model: %s", self.model)
 
         resp = None
         last_error = None
@@ -219,14 +246,16 @@ class ImageGenerationClient:
             raise ImageGenerationError(error_msg) from last_error
         
         if resp.status_code >= 400:
-            error_text = resp.text[:500] if resp.text else "No error message"
+            error_text = resp.text[:1000] if resp.text else "No error message"
             logger.error("API error %s for model %s at endpoint %s: %s", resp.status_code, self.model, endpoint, error_text)
+            logger.error("Request body was: %s", str(body)[:500])  # Логируем тело запроса для отладки
             resp.raise_for_status()
 
         data = resp.json()
         logger.debug("Raw API response received successfully for model %s", self.model)
 
-        # 3. Parse API response (camelCase)
+        # 3. Parse API response
+        # ВАЖНО: CometAPI возвращает ответ в формате Gemini API для всех моделей
         try:
             candidates = data.get("candidates") or []
             if not candidates:
@@ -252,9 +281,11 @@ class ImageGenerationClient:
                     f"No image returned by API for model {self.model}. Response: {data}"
                 )
 
+        except ImageGenerationError:
+            raise
         except Exception as e:
-            logger.exception("Failed to parse Gemini response")
-            raise ImageGenerationError(f"Failed to parse Gemini response: {e}")
+            logger.exception("Failed to parse API response")
+            raise ImageGenerationError(f"Failed to parse API response: {e}")
 
         elapsed = time.monotonic() - start
         logger.info("Image generation execution time for model %s: %.2fs", self.model, elapsed)
