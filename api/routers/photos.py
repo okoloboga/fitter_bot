@@ -205,7 +205,7 @@ async def create_tryon(req: TryOnHistoryCreate, db: AsyncSession = Depends(get_d
     Создание записи о примерке (статус processing)
     """
     try:
-        # Проверяем rate limit (10 примерок в день)
+        # Проверяем rate limit (20 примерок в день)
         today = date.today()
         result = await db.execute(
             select(func.count(TryOnHistory.id))
@@ -218,11 +218,11 @@ async def create_tryon(req: TryOnHistoryCreate, db: AsyncSession = Depends(get_d
         )
         today_count = result.scalar() or 0
 
-        if today_count >= 10:
+        if today_count >= 20:
             return {
                 "success": False,
                 "error": "rate_limit",
-                "message": "Ты достиг лимита примерок на сегодня (10/10). Попробуй завтра! 😊"
+                "message": "Ты достиг лимита примерок на сегодня (20/20). Попробуй завтра! 😊"
             }
 
         # Получаем данные о товаре из Google Sheets
@@ -384,9 +384,9 @@ async def check_tryon_limit(tg_id: int, db: AsyncSession = Depends(get_db)):
         return {
             "success": True,
             "count": today_count,
-            "limit": 10,
-            "remaining": max(0, 10 - today_count),
-            "limit_reached": today_count >= 10
+            "limit": 20,
+            "remaining": max(0, 20 - today_count),
+            "limit_reached": today_count >= 20
         }
 
     except Exception as e:
