@@ -148,16 +148,12 @@ def get_photo_selection_keyboard(photos: list):
 
 def get_model_selection_keyboard():
     """Клавиатура выбора модели генерации"""
-    # Временно скрыты GPT Image модели, так как они недоступны в CometAPI
-    # Раскомментируйте, когда модели будут доступны
-    keyboard = [
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⚡️ Быстрая (~1-2 мин)", callback_data="tryon:model:fast")],
         [InlineKeyboardButton(text="👑 Качественная (~3-4 мин)", callback_data="tryon:model:pro")],
-        # [InlineKeyboardButton(text="🎨 GPT Image -1 (~X мин)", callback_data="tryon:model:gpt-image-1")],
-        # [InlineKeyboardButton(text="🚀 GPT Image 1.5 (~X мин)", callback_data="tryon:model:gpt-image-1.5")],
+        [InlineKeyboardButton(text="🚀 GPT Image 1.5 (~3-4 мин)", callback_data="tryon:model:gpt-image-1.5")],
         [InlineKeyboardButton(text="◀️ Отмена", callback_data="tryon:cancel")]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+    ])
 
 
 def get_tryon_mode_keyboard():
@@ -436,20 +432,17 @@ async def model_selected(callback: CallbackQuery, state: FSMContext):
     # Доступные модели:
     # - fast: gemini-2.5-flash-image (быстрая генерация, ~1-2 мин)
     # - pro: gemini-3-pro-image (качественная генерация, ~3-4 мин)
-    # - gpt-image-1: GPT Image -1 (альтернативная модель, ~X мин)
     # - gpt-image-1.5: GPT Image 1.5 (альтернативная модель, ~X мин)
     # 
     # Можно переопределить названия через переменные окружения:
-    # GPT_IMAGE_1_MODEL, GPT_IMAGE_1_5_MODEL
+    # GPT_IMAGE_1_5_MODEL
     model_mapping = {
         "fast": ("gemini-2.5-flash-image", "Быстрая"),
         "pro": ("gemini-3-pro-image", "Качественная"),
-        "gpt-image-1": (
-            os.getenv("GPT_IMAGE_1_MODEL", "gpt-image-1"),  # Пробуем разные варианты: gpt-image-1, gpt-4-image-1
-            "GPT Image -1"
-        ),
         "gpt-image-1.5": (
-            os.getenv("GPT_IMAGE_1_5_MODEL", "gpt-image-1.5"),  # Пробуем разные варианты: gpt-image-1.5, gpt-4-image-1.5
+            # Явно указываем модель gpt-image-1.5 (как в апи-доке CometAPI image-edits).
+            # При необходимости можно переопределить через переменную окружения GPT_IMAGE_1_5_MODEL.
+            os.getenv("GPT_IMAGE_1_5_MODEL", "gpt-image-1.5"),
             "GPT Image 1.5"
         )
     }
@@ -527,7 +520,6 @@ async def start_generation(message: Message, state: FSMContext, product_id: str,
     time_mapping = {
         "gemini-2.5-flash-image": "1-2 минуты",
         "gemini-3-pro-image": "3-4 минуты",
-        "gpt-image-1": "2-3 минуты",  # TODO: Уточнить после тестирования
         "gpt-image-1.5": "3-4 минуты"  # TODO: Уточнить после тестирования
     }
     time_estimate = time_mapping.get(model, "2-3 минуты")

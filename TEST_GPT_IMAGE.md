@@ -2,7 +2,7 @@
 
 ## Описание
 
-Скрипт `test_gpt_image_models.py` проверяет подключение к различным моделям генерации изображений через CometAPI, включая GPT Image -1 и GPT Image 1.5.
+Скрипт `test_gpt_image_models.py` проверяет подключение к модели генерации изображений через CometAPI: GPT Image 1.5.
 
 ## Запуск теста
 
@@ -55,7 +55,6 @@ python test_gpt_image_models.py
 ### GPT Image модели (разные варианты названий):
 - `gpt-4-image-1`
 - `gpt-4-image-1.5`
-- `gpt-image-1`
 - `gpt-image-1.5`
 - `openai-image-1`
 - `openai-image-1.5`
@@ -118,7 +117,6 @@ Base URL: https://api.cometapi.com
 ❌ Не работающие модели (6):
    - gpt-4-image-1
    - gpt-4-image-1.5
-   - gpt-image-1
    - gpt-image-1.5
    - openai-image-1
    - openai-image-1.5

@@ -1,9 +1,18 @@
 """
-Тестовый скрипт для проверки подключения GPT Image моделей через CometAPI
+Тестовый скрипт для проверки подключения GPT Image моделей через CometAPI.
+
+Важно: GPT Image модели в CometAPI работают через image-edits endpoint:
+- POST /v1/images/edits
+- multipart/form-data
+- Authorization: Bearer {api_key}
+
+Поэтому тест ниже использует реальный клиент `ImageGenerationClient.process_images()`.
 """
 import asyncio
+import base64
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 # Добавляем корневую директорию в путь
@@ -40,104 +49,41 @@ async def test_model_connection(model_name: str, api_key: str, base_url: str = "
             api_key=api_key,
             model=model_name,
             base_url=base_url,
-            timeout=30.0  # Короткий таймаут для теста
+            timeout=180.0  # GPT Image может отвечать долго, особенно при генерации
         )
         
-        # Создаем простой тестовый промпт и изображение
-        # Используем минимальный тестовый запрос
-        test_prompt = "Generate a simple test image"
-        
-        # Для теста используем простой base64 изображение (1x1 пиксель PNG)
-        # Это минимальный валидный PNG в base64
+        # Минимальный валидный PNG (1x1) для теста
         minimal_png_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-        
-        # Формируем тестовый body
-        test_body = {
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [
-                        {"text": test_prompt},
-                        {
-                            "inline_data": {
-                                "mime_type": "image/png",
-                                "data": minimal_png_base64
-                            }
-                        }
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "responseModalities": ["TEXT", "IMAGE"]
-            }
-        }
-        
-        # Пробуем разные endpoint'ы
-        endpoints_to_try = []
-        if "gpt" in model_name.lower() or "openai" in model_name.lower():
-            endpoints_to_try = [
-                f"{base_url}/v1beta/models/{model_name}:generateContent",
-                f"{base_url}/v1/images/generations",
-                f"{base_url}/v1/chat/completions",
-            ]
-        else:
-            endpoints_to_try = [f"{base_url}/v1beta/models/{model_name}:generateContent"]
-        
-        print(f"\nПробуем {len(endpoints_to_try)} endpoint(ов)...")
-        
-        success = False
-        for i, endpoint in enumerate(endpoints_to_try, 1):
-            print(f"\n[{i}/{len(endpoints_to_try)}] Тестируем endpoint: {endpoint}")
-            try:
-                resp = await client.client.post(endpoint, json=test_body)
-                
-                print(f"  Статус: {resp.status_code}")
-                
-                if resp.status_code < 400:
-                    print(f"  ✅ УСПЕХ! Endpoint работает!")
-                    try:
-                        data = resp.json()
-                        print(f"  Ответ содержит ключи: {list(data.keys())}")
-                        success = True
-                        break
-                    except Exception as e:
-                        print(f"  ⚠️ Не удалось распарсить JSON: {e}")
-                        print(f"  Текст ответа (первые 200 символов): {resp.text[:200]}")
-                        success = True  # Но endpoint ответил
-                        break
-                elif resp.status_code == 404:
-                    print(f"  ❌ 404 - Endpoint не найден")
-                    if resp.text:
-                        print(f"  Сообщение: {resp.text[:200]}")
-                elif resp.status_code == 401:
-                    print(f"  ❌ 401 - Проблема с авторизацией (проверьте API ключ)")
-                    if resp.text:
-                        print(f"  Сообщение: {resp.text[:200]}")
-                elif resp.status_code == 400:
-                    print(f"  ❌ 400 - Неверный формат запроса")
-                    if resp.text:
-                        print(f"  Сообщение: {resp.text[:200]}")
-                else:
-                    print(f"  ❌ Ошибка {resp.status_code}")
-                    if resp.text:
-                        print(f"  Сообщение: {resp.text[:500]}")
-                        
-            except Exception as e:
-                error_type = type(e).__name__
-                print(f"  ❌ Исключение: {error_type}: {str(e)[:200]}")
-                if "RemoteProtocolError" in error_type:
-                    print(f"     → Сервер разорвал соединение без ответа")
-                elif "ConnectError" in error_type:
-                    print(f"     → Ошибка подключения")
-                elif "TimeoutException" in error_type:
-                    print(f"     → Таймаут соединения")
-        
-        if success:
-            print(f"\n✅ Модель '{model_name}' РАБОТАЕТ!")
+        png_bytes = base64.b64decode(minimal_png_base64)
+
+        # Для /v1/images/generations нужен только prompt
+        test_prompt = "A cute baby sea otter, simple style, high quality."
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp.write(png_bytes)
+            tmp_path = tmp.name
+
+        try:
+            # 1) text→image
+            print("\nТестируем через /v1/images/generations (JSON) с ImageGenerationClient.process_images([]) ...")
+            result_data_uri = await client.process_images([], test_prompt)
+
+            # 2) image→image (если нужно) — оставляем как дополнительную проверку
+            print("\nТестируем через /v1/images/edits (multipart) с ImageGenerationClient.process_images([image]) ...")
+            _ = await client.process_images([tmp_path], "Change the image to a minimal colorful test pattern. Keep it tiny.")
+
+            if not (isinstance(result_data_uri, str) and result_data_uri.startswith("data:image/")):
+                print("  ❌ Ответ не похож на data:image/*;base64,...")
+                print(f"  Получено: {str(result_data_uri)[:200]}")
+                return False
+
+            print("  ✅ УСПЕХ! Получили изображение в формате data URI.")
             return True
-        else:
-            print(f"\n❌ Модель '{model_name}' НЕ РАБОТАЕТ со всеми endpoint'ами")
-            return False
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
             
     except Exception as e:
         print(f"\n❌ Критическая ошибка при тестировании модели '{model_name}': {e}")
@@ -157,7 +103,7 @@ async def main():
     # Получаем API ключ из переменных окружения
     api_key = os.getenv("COMET_API_KEY") or os.getenv("IMAGE_GEN_API_KEY")
     if not api_key:
-        print("\n❌ ОШИБКА: Не найден API ключ!")
+        print("\nОШИБКА: Не найден API ключ!")
         print("Установите переменную окружения COMET_API_KEY или IMAGE_GEN_API_KEY")
         print("\nПример:")
         print("  export COMET_API_KEY='your-api-key'")
@@ -171,7 +117,6 @@ async def main():
     
     # Список моделей для тестирования (только GPT Image модели)
     models_to_test = [
-        "gpt-image-1",
         "gpt-image-1.5",
     ]
     
@@ -193,11 +138,11 @@ async def main():
     working_models = [m for m, r in results.items() if r]
     failed_models = [m for m, r in results.items() if not r]
     
-    print(f"\n✅ Рабочие модели ({len(working_models)}):")
+    print(f"\nРабочие модели ({len(working_models)}):")
     for model in working_models:
         print(f"   - {model}")
     
-    print(f"\n❌ Не работающие модели ({len(failed_models)}):")
+    print(f"\nНе работающие модели ({len(failed_models)}):")
     for model in failed_models:
         print(f"   - {model}")
     
@@ -206,12 +151,12 @@ async def main():
     print("="*60)
     
     if working_models:
-        print("\n✅ Используйте рабочие модели в маппинге:")
+        print("\nИспользуйте рабочие модели в маппинге:")
         for model in working_models:
             if "gpt" in model.lower() or "openai" in model.lower():
                 print(f"   - {model}")
     else:
-        print("\n⚠️ GPT Image модели не работают. Возможные причины:")
+        print("\nGPT Image модели не работают. Возможные причины:")
         print("   1. Модели недоступны в вашем тарифе CometAPI")
         print("   2. Неверные названия моделей (проверьте документацию)")
         print("   3. Требуется другой формат запроса для этих моделей")
